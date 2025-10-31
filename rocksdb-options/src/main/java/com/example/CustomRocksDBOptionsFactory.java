@@ -18,7 +18,7 @@ public class CustomRocksDBOptionsFactory implements RocksDBOptionsFactory {
     private static final double HIGH_PRIORITY_POOL_RATIO = 0.1;
 
     // Size of the data block cache (in bytes)
-    private static final long BLOCK_CACHE_SIZE = 260L * 1024 * 1024;
+    private static final long BLOCK_CACHE_SIZE = 130L * 1024 * 1024;
 
     // Number of bits to shard the block cache
     private static final int BLOCK_CACHE_SHARD_BITS = 2;
