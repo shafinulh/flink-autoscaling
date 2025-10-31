@@ -1,0 +1,3 @@
+[submodule "nexmark-src"]
+	path = nexmark-src
+	url = https://github.com/shafinulh/nexmark.git

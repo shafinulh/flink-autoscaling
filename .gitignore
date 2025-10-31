@@ -1,0 +1,20 @@
+# runtime state
+nexmark/
+nexmark._bak/
+flink-1.20-experiments/
+flink-justin/
+containerd/
+time,uptime,level
+analysis/figures/
+
+# build/cache artifacts
+analysis/__pycache__/
+*.pyc
+rocksdb-options/target/
+monitoring/prometheus/data/
+monitoring/grafana/data/
+*.log
+
+# tooling
+.DS_Store
+.idea/

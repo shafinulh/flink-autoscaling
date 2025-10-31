@@ -1,0 +1,21 @@
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+
+scrape_configs:
+  - job_name: flink
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 142.150.234.180:9249  # JobManager
+          - 142.150.234.167:9249  # TaskManager
+          - 142.150.234.163:9249  # TaskManager
+          - 142.150.234.182:9249  # TaskManager
+          - 142.150.234.155:9249  # TaskManager
+        labels:
+          cluster: nexmark-flink
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: '([^:]+):.*'
+        target_label: host
+        replacement: '$1'
