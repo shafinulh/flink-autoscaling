@@ -1,9 +1,11 @@
 # runtime state
 nexmark/
-nexmark._bak/
+nexmark-2_0-latest/
+justin-custom-flink/*.jar
 flink-1.20-experiments/
 flink-justin/
 containerd/
+/cni
 time,uptime,level
 analysis/figures/
 
