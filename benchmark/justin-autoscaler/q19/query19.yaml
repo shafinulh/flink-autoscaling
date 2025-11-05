@@ -1,0 +1,156 @@
+################################################################################
+#  Licensed to the Apache Software Foundation (ASF) under one
+#  or more contributor license agreements.  See the NOTICE file
+#  distributed with this work for additional information
+#  regarding copyright ownership.  The ASF licenses this file
+#  to you under the Apache License, Version 2.0 (the
+#  "License"); you may not use this file except in compliance
+#  with the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+################################################################################
+
+apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: flink
+spec:
+  image: 142.150.234.180:5000/flink-justin:dais
+  flinkVersion: v1_18
+  flinkConfiguration:
+    job.autoscaler.enabled: "false"
+    job.autoscaler.justin.enabled: "false"
+    job.autoscaler.stabilization.interval: "2m"
+    job.autoscaler.cache-hit-rate.min.threshold: "0.8"
+    job.autoscaler.state-latency.threshold: "1000000.0"
+    job.autoscaler.metrics.window: "3m"
+    pipeline.max-parallelism: "24"
+    taskmanager.numberOfTaskSlots: "4"
+    execution.checkpointing.interval: "300m"
+    jobmanager.scheduler: adaptive
+    job.autoscaler.target.utilization: "0.5"
+    job.autoscaler.target.utilization.boundary: "0.3"
+    metrics.reporters: prom
+    metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+    web.submit.enable: "true"
+    web.cancel.enable: "true"
+    state.backend: "rocksdb"
+    taskmanager.memory.managed.fraction: "0.4"
+    taskmanager.cpu.cores: "4"
+
+    state.backend.rocksdb.metrics.block-cache-usage: "true"
+    state.backend.rocksdb.metrics.block-cache-hit: "true"
+    state.backend.rocksdb.metrics.block-cache-miss: "true"
+    state.backend.rocksdb.metrics.bytes-read: "true"
+    state.backend.rocksdb.metrics.bytes-written: "true"
+    state.backend.rocksdb.metrics.column-family-as-variable: "true"
+    state.backend.rocksdb.metrics.compaction-pending: "true"
+    state.backend.rocksdb.metrics.compaction-read-bytes: "true"
+    state.backend.rocksdb.metrics.compaction-write-bytes: "true"
+    state.backend.rocksdb.metrics.cur-size-active-mem-table: "true"
+    state.backend.rocksdb.metrics.cur-size-all-mem-tables: "true"
+    state.backend.rocksdb.metrics.estimate-live-data-size: "true"
+    state.backend.rocksdb.metrics.estimate-num-keys: "true"
+    state.backend.rocksdb.metrics.estimate-pending-compaction-bytes: "true"
+    state.backend.rocksdb.metrics.estimate-table-readers-mem: "true"
+    state.backend.rocksdb.metrics.live-sst-files-size: "true"
+    state.backend.rocksdb.metrics.size-all-mem-tables: "true"
+    state.backend.rocksdb.metrics.total-sst-files-size: "true"
+
+    state.backend.latency-track.keyed-state-enabled: "true"
+    state.backend.rocksdb.use-direct-writes: "true"
+    state.backend.rocksdb.use-direct-reads: "true"
+    state.backend.rocksdb.localdir: "/data/flink/rocksdb"
+
+  serviceAccount: flink
+  podTemplate:
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: pod-template
+    spec:
+      containers:
+        - name: flink-main-container
+          ports:
+            - containerPort: 9249
+              name: prom
+  jobManager:
+    resource:
+      memory: "2048m"
+      cpu: 1
+
+  taskManager:
+    resource:
+      memory: "2048m"
+      cpu: 4
+    podTemplate:
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: task-manager-pod-template
+      spec:
+        nodeSelector:
+          tier: taskmanager
+        volumes:
+          - name: rocksdb-local
+            hostPath:
+              path: /data
+              type: DirectoryOrCreate
+        containers:
+          - name: flink-main-container
+            volumeMounts:
+              - name: rocksdb-local
+                mountPath: /data
+  job:
+    jarURI: local:///opt/flink/lib/nexmark-flink-0.3-SNAPSHOT.jar
+    entryClass: com.github.nexmark.flink.sql.SqlQueryJob
+    parallelism: 1
+    upgradeMode: stateless
+    args:
+      - "--query"
+      - "q19"
+      - "--tps"
+      - "10000000"
+      - "--events"
+      - "0"
+      - "--job-name"
+      - "Nexmark Query19 SQL"
+
+  logConfiguration:
+    "log4j-console.properties": |
+      rootLogger.level = INFO
+      rootLogger.appenderRef.file.ref = LogFile
+      rootLogger.appenderRef.console.ref = LogConsole
+      appender.file.name = LogFile
+      appender.file.type = File
+      appender.file.append = false
+      appender.file.fileName = ${sys:log.file}
+      appender.file.layout.type = PatternLayout
+      appender.file.layout.pattern = %d{yyyy-MM-dd HH:mm:ss,SSS} %-5p %-60c %x - %m%n
+      appender.console.name = LogConsole
+      appender.console.type = CONSOLE
+      appender.console.layout.type = PatternLayout
+      appender.console.layout.pattern = %d{yyyy-MM-dd HH:mm:ss,SSS} %-5p %-60c %x - %m%n
+      logger.akka.name = akka
+      logger.akka.level = INFO
+      logger.kafka.name= org.apache.kafka
+      logger.kafka.level = INFO
+      logger.hadoop.name = org.apache.hadoop
+      logger.hadoop.level = INFO
+      logger.zookeeper.name = org.apache.zookeeper
+      logger.zookeeper.level = INFO
+      logger.netty.name = org.apache.flink.shaded.akka.org.jboss.netty.channel.DefaultChannelPipeline
+      logger.netty.level = OFF
+
+      log4j.logger.org.apache.http.wire = OFF
+      log4j.logger.org.apache.http.headers = OFF
+      logger.http.name = org.apache.http
+      logger.http.level = OFF
+      logger.aws.name = com.amazonaws
+      logger.aws.level = OFF
