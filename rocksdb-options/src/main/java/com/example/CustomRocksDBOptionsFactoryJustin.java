@@ -1,56 +1,59 @@
 package com.example;
 
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.GlobalConfiguration;
+import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.contrib.streaming.state.RocksDBNativeMetricOptions;
 import org.apache.flink.contrib.streaming.state.RocksDBOptionsFactory;
+import org.apache.flink.runtime.clusterframework.TaskExecutorProcessSpec;
+import org.apache.flink.runtime.clusterframework.TaskExecutorProcessUtils;
+import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
+import org.apache.flink.runtime.taskmanager.Task;
 import org.rocksdb.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.lang.reflect.Field;
 import java.util.Collection;
+import java.util.OptionalLong;
 import java.util.Set;
 
-public class CustomRocksDBOptionsFactory implements RocksDBOptionsFactory {
+public class CustomRocksDBOptionsFactoryJustin implements RocksDBOptionsFactory {
+
+    private static final Logger LOG =
+        LoggerFactory.getLogger(CustomRocksDBOptionsFactoryJustin.class);
 
     // TODO: add mode where no WBM is used? RocksDB will allocate memory independently per ColumnFamily?
     private enum MemoryProvisioningMode {
         FLINK_MANAGED,
+        FLINK_MANAGED_INDEP,
         MANUAL_INDEP,
         MANUAL_CHARGED
     }
-    private static final MemoryProvisioningMode MEMORY_MODE = MemoryProvisioningMode.MANUAL_INDEP;
+    private static final MemoryProvisioningMode MEMORY_MODE = MemoryProvisioningMode.FLINK_MANAGED_INDEP;
 
     // ----------------------------
     // Flink-managed memory inputs
     // ----------------------------
-    // total Flink memory scraped from TM logs (usually ~75‑85% of total process memory)
-    private static final long TOTAL_FLINK_MEMORY_BYTES = (long) (1.55 * 1024 * 1024 * 1024L);
-    // flink memory config settings (flink-conf.yaml)
-    private static final double MANAGED_MEMORY_FRACTION = 0.4;
-    private static final int TASK_SLOTS_PER_TM = 4;
     private static final double WRITE_BUFFER_RATIO = 0.5;
     private static final double HIGH_PRIORITY_POOL_RATIO = 0.1;
-
-
-    // default Flink memory allocations (from RocksDBMemoryControllerUtils)
-    private static final long TOTAL_MANAGED_MEMORY_BYTES =
-        (long) (TOTAL_FLINK_MEMORY_BYTES * MANAGED_MEMORY_FRACTION);
-    private static final long PER_SLOT_MANAGED_MEMORY_BYTES =
-        TOTAL_MANAGED_MEMORY_BYTES / TASK_SLOTS_PER_TM;
-
-    private static final long FLINK_BLOCK_CACHE_CAPACITY_BYTES =
-        (long) (((3 - WRITE_BUFFER_RATIO) * PER_SLOT_MANAGED_MEMORY_BYTES) / 3);
     // numShardBits = -1 means it is automatically determined: every shard will be at least 512KB and number of shard bits will not exceed 6
-    private static final int DEFAULT_BLOCK_CACHE_SHARD_BITS = -1;
+    private static final int DEFAULT_BLOCK_CACHE_SHARD_BITS = 2;
 
-    private static final long FLINK_WRITE_BUFFER_MANAGER_CAPACITY_BYTES =
-        (long) ((2 * PER_SLOT_MANAGED_MEMORY_BYTES * WRITE_BUFFER_RATIO) / 3);
+    // fallback config values used when we cannot discover real TaskExecutor settings
+    private static final long FALLBACK_TOTAL_FLINK_MEMORY_BYTES = (long) (3.35 * 1024 * 1024 * 1024L);
+    private static final double FALLBACK_MANAGED_MEMORY_FRACTION = 0.4;
+    private static final int FALLBACK_TASK_SLOTS_PER_TM = 4;
+    private static final long FALLBACK_TOTAL_MANAGED_MEMORY_BYTES =
+        (long) (FALLBACK_TOTAL_FLINK_MEMORY_BYTES * FALLBACK_MANAGED_MEMORY_FRACTION);
 
     // --------------------------
     // Manual memory provisioning
     // --------------------------
-    private static final long MANUAL_BLOCK_CACHE_CAPACITY_BYTES = 130L * 1024 * 1024;
-    private static final int MANUAL_BLOCK_CACHE_SHARD_BITS = 2;
-    private static final long MANUAL_WRITE_BUFFER_MANAGER_CAPACITY_BYTES = 256L * 1024 * 1024;
+    private static final long MANUAL_BLOCK_CACHE_CAPACITY_BYTES = 20L * 1024 * 1024;
+    private static final int MANUAL_BLOCK_CACHE_SHARD_BITS = 6;
+    private static final long MANUAL_WRITE_BUFFER_MANAGER_CAPACITY_BYTES = 53L * 1024 * 1024;
 
     // --------------------------
     // Default RocksDB settings
@@ -204,12 +207,9 @@ public class CustomRocksDBOptionsFactory implements RocksDBOptionsFactory {
     private static MemoryLayout resolveMemoryLayout() {
         switch (MEMORY_MODE) {
             case FLINK_MANAGED:
-                return new MemoryLayout(
-                    FLINK_BLOCK_CACHE_CAPACITY_BYTES,
-                    DEFAULT_BLOCK_CACHE_SHARD_BITS,
-                    FLINK_WRITE_BUFFER_MANAGER_CAPACITY_BYTES,
-                    true // WBM charges against the block cache (Flink default)
-                );
+                return buildFlinkManagedLayout(true);
+            case FLINK_MANAGED_INDEP:
+                return buildFlinkManagedLayout(false);
             case MANUAL_INDEP:
                 return new MemoryLayout(
                     MANUAL_BLOCK_CACHE_CAPACITY_BYTES,
@@ -228,6 +228,49 @@ public class CustomRocksDBOptionsFactory implements RocksDBOptionsFactory {
         throw new IllegalStateException();
     }
 
+    private static MemoryLayout buildFlinkManagedLayout(boolean chargeWriteBuffersToCache) {
+        OptionalLong detected =
+            ManagedMemoryIntrospector.detectCurrentTaskManagedMemoryBytes();
+        if (detected.isPresent()) {
+            long perSlotManagedBytes = Math.max(detected.getAsLong(), 1L);
+            long blockCacheCapacity = calculateFlinkBlockCacheCapacity(perSlotManagedBytes);
+            long writeBufferCapacity =
+                calculateFlinkWriteBufferManagerCapacity(perSlotManagedBytes);
+            if (LOG.isDebugEnabled()) {
+                LOG.debug(
+                    "Using ResourceProfile managed memory for current task: perSlot={} bytes, chargeWbm={}",
+                    perSlotManagedBytes,
+                    chargeWriteBuffersToCache);
+            }
+            return new MemoryLayout(
+                blockCacheCapacity,
+                DEFAULT_BLOCK_CACHE_SHARD_BITS,
+                writeBufferCapacity,
+                chargeWriteBuffersToCache
+            );
+        }
+
+        FlinkManagedMemoryStats stats = ManagedMemoryIntrospector.resolveFromConfig();
+        long perSlotManagedBytes = stats.perSlotManagedMemoryBytes();
+        long blockCacheCapacity = calculateFlinkBlockCacheCapacity(perSlotManagedBytes);
+        long writeBufferCapacity =
+            calculateFlinkWriteBufferManagerCapacity(perSlotManagedBytes);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug(
+                "Using Flink-managed memory: total={} bytes, slots={}, perSlot={} bytes, chargeWbm={}",
+                stats.totalManagedMemoryBytes,
+                stats.taskSlotsPerTm,
+                perSlotManagedBytes,
+                chargeWriteBuffersToCache);
+        }
+        return new MemoryLayout(
+            blockCacheCapacity,
+            DEFAULT_BLOCK_CACHE_SHARD_BITS,
+            writeBufferCapacity,
+            chargeWriteBuffersToCache // false means block cache + WBM operate independently
+        );
+    }
+
     private static void enableStatsDump(DBOptions options) {
         if (!ENABLE_STATS_DUMP) {
             return;
@@ -241,6 +284,114 @@ public class CustomRocksDBOptionsFactory implements RocksDBOptionsFactory {
             rocksDbLogDirFile.mkdirs();
         }
         options.setDbLogDir(rocksDbInstanceLogPath);
+    }
+
+    private static long calculateFlinkBlockCacheCapacity(long perSlotManagedBytes) {
+        long sanitized = Math.max(perSlotManagedBytes, 1L);
+        return (long) (((3 - WRITE_BUFFER_RATIO) * sanitized) / 3);
+    }
+
+    private static long calculateFlinkWriteBufferManagerCapacity(long perSlotManagedBytes) {
+        long sanitized = Math.max(perSlotManagedBytes, 1L);
+        return (long) ((2 * sanitized * WRITE_BUFFER_RATIO) / 3);
+    }
+
+    private static final class FlinkManagedMemoryStats {
+        private final long totalManagedMemoryBytes;
+        private final int taskSlotsPerTm;
+
+        private FlinkManagedMemoryStats(long totalManagedMemoryBytes, int taskSlotsPerTm) {
+            this.totalManagedMemoryBytes = totalManagedMemoryBytes;
+            this.taskSlotsPerTm = Math.max(taskSlotsPerTm, 1);
+        }
+
+        private long perSlotManagedMemoryBytes() {
+            return Math.max(totalManagedMemoryBytes / taskSlotsPerTm, 1L);
+        }
+    }
+
+    private static final class ManagedMemoryIntrospector {
+        private static final Object LOCK = new Object();
+        private static volatile FlinkManagedMemoryStats cachedStats;
+
+        private static FlinkManagedMemoryStats resolveFromConfig() {
+            FlinkManagedMemoryStats stats = cachedStats;
+            if (stats != null) {
+                return stats;
+            }
+            synchronized (LOCK) {
+                stats = cachedStats;
+                if (stats != null) {
+                    return stats;
+                }
+                cachedStats = detectFromConfig();
+                return cachedStats;
+            }
+        }
+
+        private static FlinkManagedMemoryStats detectFromConfig() {
+            try {
+                Configuration configuration = loadFlinkConfiguration();
+                TaskExecutorProcessSpec spec =
+                    TaskExecutorProcessUtils.processSpecFromConfig(configuration);
+                long totalManaged = spec.getManagedMemorySize().getBytes();
+                int slots = spec.getNumSlots();
+                if (totalManaged <= 0 || slots <= 0) {
+                    LOG.warn(
+                        "Invalid managed memory detection (total={}, slots={}), falling back to defaults.",
+                        totalManaged,
+                        slots);
+                    return fallbackStats();
+                }
+                LOG.info(
+                    "Detected managed memory from Flink configuration: total={} bytes, slots={}",
+                    totalManaged,
+                    slots);
+                return new FlinkManagedMemoryStats(totalManaged, slots);
+            } catch (Throwable t) {
+                LOG.warn(
+                    "Unable to determine Flink managed memory from configuration, falling back to defaults.",
+                    t);
+                return fallbackStats();
+            }
+        }
+
+        private static Configuration loadFlinkConfiguration() {
+            String confDir = System.getenv("FLINK_CONF_DIR");
+            if (confDir != null && !confDir.isEmpty()) {
+                return GlobalConfiguration.loadConfiguration(confDir);
+            }
+            return GlobalConfiguration.loadConfiguration();
+        }
+
+        private static FlinkManagedMemoryStats fallbackStats() {
+            return new FlinkManagedMemoryStats(
+                FALLBACK_TOTAL_MANAGED_MEMORY_BYTES, FALLBACK_TASK_SLOTS_PER_TM);
+        }
+
+        private static OptionalLong detectCurrentTaskManagedMemoryBytes() {
+            try {
+                Task task = Task.getCurrentTaskOrNull();
+                if (task == null) {
+                    return OptionalLong.empty();
+                }
+                ResourceProfile profile = task.getResourceProfile();
+                if (profile == null) {
+                    return OptionalLong.empty();
+                }
+                MemorySize managedMemory = profile.getManagedMemory();
+                if (managedMemory == null) {
+                    return OptionalLong.empty();
+                }
+                long bytes = managedMemory.getBytes();
+                if (bytes > 0) {
+                    return OptionalLong.of(bytes);
+                }
+            } catch (Throwable t) {
+                LOG.debug("Unable to determine managed memory from current task.", t);
+            }
+            return OptionalLong.empty();
+        }
     }
 
     private static final class MemoryLayout {
