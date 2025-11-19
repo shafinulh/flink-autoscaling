@@ -1,13 +1,17 @@
-# runtime state
+# runtime 
 nexmark/
 nexmark-2_0-latest/
 justin-custom-flink/*.jar
-flink-1.20-experiments/
+flink_1.20_src/
+flink_1-20_build/
+flink/
 flink-justin/
 containerd/
+kafka/
+kafka_2.13-3.7.2/
+/node-v16.13.2/
 /cni
-time,uptime,level
-analysis/figures/
+
 
 # build/cache artifacts
 analysis/__pycache__/
@@ -15,7 +19,9 @@ analysis/__pycache__/
 rocksdb-options/target/
 monitoring/prometheus/data/
 monitoring/grafana/data/
+analysis/figures/
 *.log
+time,uptime,level*
 
 # tooling
 .DS_Store

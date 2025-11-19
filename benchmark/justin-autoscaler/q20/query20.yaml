@@ -1,0 +1,213 @@
+################################################################################
+#  Licensed to the Apache Software Foundation (ASF) under one
+#  or more contributor license agreements.  See the NOTICE file
+#  distributed with this work for additional information
+#  regarding copyright ownership.  The ASF licenses this file
+#  to you under the Apache License, Version 2.0 (the
+#  "License"); you may not use this file except in compliance
+#  with the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+################################################################################
+
+apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: flink
+spec:
+  image: 142.150.234.180:5000/flink-justin:options-factory
+  flinkVersion: v1_18
+
+  flinkConfiguration:
+    pekko.ask.timeout: 300 s
+    pekko.client.timeout: 60 s
+    rest.client.timeout: 60 s
+    rest.client.max-retry: "8"
+
+    pipeline.classpaths: "file:///opt/flink/examples/justin/rocksdb-options-1.0-SNAPSHOT.jar"
+    # autoscaler settings
+    job.autoscaler.enabled: "true"
+    job.autoscaler.justin.enabled: "true"
+    job.autoscaler.stabilization.interval: "5m"
+    job.autoscaler.metrics.window: "2m"
+    job.autoscaler.cache-hit-rate.min.threshold: "0.92"
+    job.autoscaler.cache-hit-rate.max.threshold: "0.99"
+    job.autoscaler.state-latency.threshold: "1000000.0"
+    job.autoscaler.max-memory-level: "3"
+    pipeline.max-parallelism: "24"
+    
+    job.autoscaler.vertex.max-parallelism: "6"
+    job.autoscaler.min-improved-throughput: "0.01"
+    job.autoscaler.cache-hit-rate.improved.threshold: "0.01"
+
+    job.autoscaler.target.utilization: "0.5"
+    job.autoscaler.target.utilization.boundary: "0.3"
+
+    # to enable elastic scaling
+    jobmanager.scheduler: adaptive
+    
+    # flink-conf.yaml settings
+    metrics.reporters: prom
+    metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+    web.submit.enable: "true"
+    web.cancel.enable: "true"
+
+    # task manager config
+    taskmanager.numberOfTaskSlots: "4"
+    # taskmanager.memory.managed.fraction: "0.4"
+    taskmanager.cpu.cores: "4"
+
+    # state backend config
+    state.backend: "rocksdb"
+    # Custom RocksDB options to set RocksDB Read (Block Cache) and Write (Write Buffer Manager) path memory allocations
+    state.backend.rocksdb.memory.managed: false
+    state.backend.rocksdb.options-factory: com.example.CustomRocksDBOptionsFactoryJustin
+    # These are also specified in the options factory
+    state.backend.rocksdb.use-direct-writes: "true"
+    state.backend.rocksdb.use-direct-reads: "true"
+
+    # directories inside the container
+    io.tmp.dirs: "/tmp"
+    state.backend.rocksdb.localdir: "/data/flink/rocksdb"
+    state.checkpoints.dir: "file:///data/flink-state/checkpoints"
+
+    # execution.checkpointing.incremental: true
+    # execution.checkpointing.interval: "300m"
+    # execution.checkpointing.mode: EXACTLY_ONCE
+    # state.backend.local-recovery: true
+
+
+    # metrics collection
+    state.backend.rocksdb.metrics.block-cache-capacity: "true"
+    state.backend.rocksdb.metrics.block-cache-usage: "true"
+    state.backend.rocksdb.metrics.block-cache-pinned-usage: "true"
+    state.backend.rocksdb.metrics.block-cache-hit: "true"
+    state.backend.rocksdb.metrics.block-cache-miss: "true"
+    state.backend.rocksdb.metrics.bytes-read: "true"
+    state.backend.rocksdb.metrics.bytes-written: "true"
+    state.backend.rocksdb.metrics.column-family-as-variable: "true"
+    state.backend.rocksdb.metrics.compaction-pending: "true"
+    state.backend.rocksdb.metrics.compaction-read-bytes: "true"
+    state.backend.rocksdb.metrics.compaction-write-bytes: "true"
+    state.backend.rocksdb.metrics.cur-size-active-mem-table: "true"
+    state.backend.rocksdb.metrics.cur-size-all-mem-tables: "true"
+    state.backend.rocksdb.metrics.estimate-live-data-size: "true"
+    state.backend.rocksdb.metrics.estimate-num-keys: "true"
+    state.backend.rocksdb.metrics.estimate-pending-compaction-bytes: "true"
+    state.backend.rocksdb.metrics.estimate-table-readers-mem: "true"
+    state.backend.rocksdb.metrics.live-sst-files-size: "true"
+    state.backend.rocksdb.metrics.size-all-mem-tables: "true"
+    state.backend.rocksdb.metrics.total-sst-files-size: "true"
+
+    # state.backend.latency-track.keyed-state-enabled: "true"
+
+  serviceAccount: flink
+
+  # Mount volumes for both JM and TM
+  podTemplate:
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: pod-template
+    spec:
+      securityContext:
+        fsGroup: 9999
+      containers:
+        - name: flink-main-container
+          volumeMounts:
+            - name: host-tmp
+              mountPath: /tmp
+            - name: host-flink-state
+              mountPath: /data/flink-state
+            - name: host-rocksdb
+              mountPath: /data/flink/rocksdb
+          ports:
+            - containerPort: 9249
+              name: prom
+      volumes:
+        - name: host-tmp
+          hostPath:
+            # Node path to use for container /tmp
+            path: /var/lib/flink-tmp
+            type: DirectoryOrCreate
+        - name: host-flink-state
+          hostPath:
+            # Node path to use for container /data/flink-state
+            path: /var/lib/flink-state
+            type: DirectoryOrCreate
+        - name: host-rocksdb
+          hostPath:
+            # Node SSD path to use for container /data/flink/rocksdb
+            path: /data/flink/rocksdb
+            type: Directory
+
+  jobManager:
+    resource:
+      memory: "2048m"
+      cpu: 1
+
+  taskManager:
+    resource:
+      memory: "2048m"
+      cpu: 4
+    podTemplate:
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: task-manager-pod-template
+      spec:
+        nodeSelector:
+          tier: taskmanager
+  job:
+    jarURI: local:///opt/flink/lib/nexmark-flink-0.3-SNAPSHOT.jar
+    entryClass: com.github.nexmark.flink.sql.SqlQueryJob
+    parallelism: 1
+    upgradeMode: stateless
+    args:
+      - "--query"
+      - "q20"
+      - "--tps"
+      - "750000"
+      - "--events"
+      - "0"
+      - "--job-name"
+      - "Nexmark Query20 SQL"
+
+  logConfiguration:
+    "log4j-console.properties": |
+      rootLogger.level = INFO
+      rootLogger.appenderRef.file.ref = LogFile
+      rootLogger.appenderRef.console.ref = LogConsole
+      appender.file.name = LogFile
+      appender.file.type = File
+      appender.file.append = false
+      appender.file.fileName = ${sys:log.file}
+      appender.file.layout.type = PatternLayout
+      appender.file.layout.pattern = %d{yyyy-MM-dd HH:mm:ss,SSS} %-5p %-60c %x - %m%n
+      appender.console.name = LogConsole
+      appender.console.type = CONSOLE
+      appender.console.layout.type = PatternLayout
+      appender.console.layout.pattern = %d{yyyy-MM-dd HH:mm:ss,SSS} %-5p %-60c %x - %m%n
+      logger.akka.name = akka
+      logger.akka.level = INFO
+      logger.kafka.name= org.apache.kafka
+      logger.kafka.level = INFO
+      logger.hadoop.name = org.apache.hadoop
+      logger.hadoop.level = INFO
+      logger.zookeeper.name = org.apache.zookeeper
+      logger.zookeeper.level = INFO
+      logger.netty.name = org.apache.flink.shaded.akka.org.jboss.netty.channel.DefaultChannelPipeline
+      logger.netty.level = OFF
+
+      log4j.logger.org.apache.http.wire = OFF
+      log4j.logger.org.apache.http.headers = OFF
+      logger.http.name = org.apache.http
+      logger.http.level = OFF
+      logger.aws.name = com.amazonaws
+      logger.aws.level = OFF
