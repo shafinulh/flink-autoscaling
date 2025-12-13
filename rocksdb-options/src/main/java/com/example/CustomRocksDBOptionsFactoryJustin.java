@@ -52,7 +52,7 @@ public class CustomRocksDBOptionsFactoryJustin implements RocksDBOptionsFactory 
     // Manual memory provisioning
     // --------------------------
     private static final long MANUAL_BLOCK_CACHE_CAPACITY_BYTES = 20L * 1024 * 1024;
-    private static final int MANUAL_BLOCK_CACHE_SHARD_BITS = 6;
+    private static final int MANUAL_BLOCK_CACHE_SHARD_BITS = 2;
     private static final long MANUAL_WRITE_BUFFER_MANAGER_CAPACITY_BYTES = 53L * 1024 * 1024;
 
     // --------------------------
@@ -85,8 +85,8 @@ public class CustomRocksDBOptionsFactoryJustin implements RocksDBOptionsFactory 
     private static final boolean USE_PARTITIONED_INDEX_FILTERS = false;
 
     // stat dumps to see histogram types
-    private static final boolean ENABLE_STATS_DUMP = false;
-    private static final int STATS_DUMP_PERIOD_SEC = 90;
+    private static final boolean ENABLE_STATS_DUMP = true;
+    private static final int STATS_DUMP_PERIOD_SEC = 180;
     private static final String ROCKSDB_LOG_SUBDIR_NAME = "rocksdb_native_logs";
 
     @Override
@@ -162,6 +162,12 @@ public class CustomRocksDBOptionsFactoryJustin implements RocksDBOptionsFactory 
             // Also watch compaction key-drop metrics for visibility
             tickers.add(TickerType.COMPACTION_KEY_DROP_OBSOLETE);
             tickers.add(TickerType.COMPACTION_KEY_DROP_USER);
+
+            tickers.add(TickerType.MEMTABLE_HIT);
+            tickers.add(TickerType.MEMTABLE_MISS);
+
+            tickers.add(TickerType.NUMBER_KEYS_READ);
+            tickers.add(TickerType.NUMBER_KEYS_WRITTEN);
 
             return nativeMetricOptions;
         } catch (NoSuchFieldException | IllegalAccessException e) {
@@ -276,14 +282,14 @@ public class CustomRocksDBOptionsFactoryJustin implements RocksDBOptionsFactory 
             return;
         }
         options.setStatsDumpPeriodSec(STATS_DUMP_PERIOD_SEC);
-        String flinkLogDirEnv = System.getenv("FLINK_LOG_DIR");
-        String baseLogDir = (flinkLogDirEnv != null && !flinkLogDirEnv.isEmpty()) ? flinkLogDirEnv : ".";
-        String rocksDbInstanceLogPath = baseLogDir + File.separator + ROCKSDB_LOG_SUBDIR_NAME;
-        File rocksDbLogDirFile = new File(rocksDbInstanceLogPath);
-        if (!rocksDbLogDirFile.exists()) {
-            rocksDbLogDirFile.mkdirs();
-        }
-        options.setDbLogDir(rocksDbInstanceLogPath);
+        // String flinkLogDirEnv = System.getenv("FLINK_LOG_DIR");
+        // String baseLogDir = (flinkLogDirEnv != null && !flinkLogDirEnv.isEmpty()) ? flinkLogDirEnv : ".";
+        // String rocksDbInstanceLogPath = baseLogDir + File.separator + ROCKSDB_LOG_SUBDIR_NAME;
+        // File rocksDbLogDirFile = new File(rocksDbInstanceLogPath);
+        // if (!rocksDbLogDirFile.exists()) {
+        //     rocksDbLogDirFile.mkdirs();
+        // }
+        // options.setDbLogDir(rocksDbInstanceLogPath);
     }
 
     private static long calculateFlinkBlockCacheCapacity(long perSlotManagedBytes) {
