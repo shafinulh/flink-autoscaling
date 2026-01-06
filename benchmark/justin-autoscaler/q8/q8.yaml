@@ -32,7 +32,7 @@ spec:
 
     pipeline.classpaths: "file:///opt/flink/examples/justin/rocksdb-options-1.0-SNAPSHOT.jar"
     # autoscaler settings
-    job.autoscaler.enabled: "true"
+    job.autoscaler.enabled: "false"
     job.autoscaler.justin.enabled: "false"
     job.autoscaler.stabilization.interval: "20m"
     job.autoscaler.metrics.window: "10m"
@@ -167,23 +167,20 @@ spec:
         nodeSelector:
           tier: taskmanager
   job:
-    jarURI: local:///opt/flink/lib/nexmark-flink-0.3-SNAPSHOT.jar
-    entryClass: com.github.nexmark.flink.sql.SqlQueryJob
+    jarURI: local:///opt/flink/examples/justin/Query8.jar
     parallelism: 1
     upgradeMode: stateless
     args:
-      - "--query"
-      - "q7"
-      - "--tps"
-      - "20000"
-      - "--events"
-      - "0"
+      - "--auction-srcRate"
+      - "42000"
+      - "--person-srcRate"
+      - "12000"
+      - "--p-auction-source"
+      - "2"
+      - "--p-person-source"
+      - "2"
       - "--disableOperatorChaining"
-      - "false"
-      # - "--bootstrap-servers"
-      # - "c180:9092"
-      - "--job-name"
-      - "Nexmark Query7 SQL"
+      - "true"
 
   logConfiguration:
     "log4j-console.properties": |

@@ -25,15 +25,26 @@ spec:
   flinkVersion: v1_18
 
   flinkConfiguration:
+    pekko.ask.timeout: 300 s
+    pekko.client.timeout: 60 s
+    rest.client.timeout: 60 s
+    rest.client.max-retry: "8"
+
     pipeline.classpaths: "file:///opt/flink/examples/justin/rocksdb-options-1.0-SNAPSHOT.jar"
-    # autoscaler setting
+    # autoscaler settings
     job.autoscaler.enabled: "true"
     job.autoscaler.justin.enabled: "true"
     job.autoscaler.stabilization.interval: "1m"
-    job.autoscaler.cache-hit-rate.min.threshold: "0.8"
-    job.autoscaler.state-latency.threshold: "1000000.0"
     job.autoscaler.metrics.window: "2m"
+    job.autoscaler.cache-hit-rate.min.threshold: "0.85"
+    job.autoscaler.cache-hit-rate.max.threshold: "0.99"
+    job.autoscaler.state-latency.threshold: "1000000.0"
+    # job.autoscaler.max-memory-level: "2"
     pipeline.max-parallelism: "24"
+
+    job.autoscaler.vertex.max-parallelism: "6"
+    job.autoscaler.min-improved-throughput: "0.05"
+    job.autoscaler.cache-hit-rate.improved.threshold: "0.05"
 
     job.autoscaler.target.utilization: "0.5"
     job.autoscaler.target.utilization.boundary: "0.3"
@@ -49,15 +60,14 @@ spec:
 
     # task manager config
     taskmanager.numberOfTaskSlots: "4"
-    taskmanager.memory.managed.fraction: "0.4"
+    # taskmanager.memory.managed.fraction: "0.4"
     taskmanager.cpu.cores: "4"
 
     # state backend config
     state.backend: "rocksdb"
-    execution.checkpointing.interval: "300m"
     # Custom RocksDB options to set RocksDB Read (Block Cache) and Write (Write Buffer Manager) path memory allocations
-    # state.backend.rocksdb.memory.managed: false
-    # state.backend.rocksdb.options-factory: com.example.CustomRocksDBOptionsFactoryJustin
+    state.backend.rocksdb.memory.managed: false
+    state.backend.rocksdb.options-factory: com.example.CustomRocksDBOptionsFactoryJustin
     # These are also specified in the options factory
     state.backend.rocksdb.use-direct-writes: "true"
     state.backend.rocksdb.use-direct-reads: "true"
@@ -66,6 +76,12 @@ spec:
     io.tmp.dirs: "/tmp"
     state.backend.rocksdb.localdir: "/data/flink/rocksdb"
     state.checkpoints.dir: "file:///data/flink-state/checkpoints"
+
+    # execution.checkpointing.incremental: true
+    # execution.checkpointing.interval: "300m"
+    # execution.checkpointing.mode: EXACTLY_ONCE
+    # state.backend.local-recovery: true
+
 
     # metrics collection
     state.backend.rocksdb.metrics.block-cache-capacity: "true"

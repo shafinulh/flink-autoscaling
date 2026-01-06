@@ -21,10 +21,12 @@ kind: FlinkDeployment
 metadata:
   name: flink
 spec:
-  image: 142.150.234.180:5000/flink-justin:dais
+  image: 142.150.234.180:5000/flink-justin:options-factory
   flinkVersion: v1_18
   flinkConfiguration:
-    job.autoscaler.enabled: "true"
+    pipeline.classpaths: "file:///opt/flink/examples/justin/rocksdb-options-1.0-SNAPSHOT.jar"
+
+    job.autoscaler.enabled: "false"
     job.autoscaler.justin.enabled: "JUSTIN"
     job.autoscaler.stabilization.interval: "1m"
     job.autoscaler.cache-hit-rate.min.threshold: "0.8"
@@ -49,6 +51,14 @@ spec:
     #taskmanager.memory.network.max: "359703515b"
     #taskmanager.memory.network.min: "359703515b"
     #taskmanager.memory.managed.size: "1438814063b"
+
+    state.backend.rocksdb.memory.managed: false
+    state.backend.rocksdb.options-factory: com.example.CustomRocksDBOptionsFactoryJustin
+
+    # directories inside the container
+    io.tmp.dirs: "/tmp"
+    state.backend.rocksdb.localdir: "/data/flink/rocksdb"
+    state.checkpoints.dir: "file:///data/flink-state/checkpoints"
 
     state.backend.rocksdb.metrics.block-cache-usage: "true"
     state.backend.rocksdb.metrics.block-cache-hit: "true"
@@ -80,12 +90,37 @@ spec:
     metadata:
       name: pod-template
     spec:
+      securityContext:
+        fsGroup: 9999
       containers:
-        # Do not change the main container name
         - name: flink-main-container
+          volumeMounts:
+            - name: host-tmp
+              mountPath: /tmp
+            - name: host-flink-state
+              mountPath: /data/flink-state
+            - name: host-rocksdb
+              mountPath: /data/flink/rocksdb
           ports:
             - containerPort: 9249
               name: prom
+      volumes:
+        - name: host-tmp
+          hostPath:
+            # Node path to use for container /tmp
+            path: /var/lib/flink-tmp
+            type: DirectoryOrCreate
+        - name: host-flink-state
+          hostPath:
+            # Node path to use for container /data/flink-state
+            path: /var/lib/flink-state
+            type: DirectoryOrCreate
+        - name: host-rocksdb
+          hostPath:
+            # Node SSD path to use for container /data/flink/rocksdb
+            path: /data/flink/rocksdb
+            type: Directory
+
   jobManager:
     resource:
       memory: "2048m"
@@ -103,16 +138,6 @@ spec:
       spec:
         nodeSelector:
           tier: taskmanager
-        volumes:
-          - name: rocksdb-local
-            hostPath:
-              path: /data
-              type: DirectoryOrCreate
-        containers:
-          - name: flink-main-container
-            volumeMounts:
-              - name: rocksdb-local
-                mountPath: /data
   job:
     jarURI: local:///opt/flink/examples/justin/Query8.jar
     parallelism: 1
@@ -131,7 +156,7 @@ spec:
 
   logConfiguration:
     "log4j-console.properties": |
-      rootLogger.level = DEBUG
+      rootLogger.level = INFO
       rootLogger.appenderRef.file.ref = LogFile
       rootLogger.appenderRef.console.ref = LogConsole
       appender.file.name = LogFile
