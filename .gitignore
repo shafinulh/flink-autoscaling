@@ -7,8 +7,10 @@ flink_1-20_build/
 flink/
 flink-justin/
 containerd/
-kafka/
+kafka
 kafka_2.13-3.7.2/
+rocksdb/
+scaling-logs/
 /node-v16.13.2/
 /cni
 
