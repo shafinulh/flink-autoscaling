@@ -84,6 +84,7 @@ public class CustomRocksDBOptionsFactory implements RocksDBOptionsFactory {
     private static final boolean ENABLE_STATS_DUMP = true;
     private static final int STATS_DUMP_PERIOD_SEC = 300;
     private static final String ROCKSDB_LOG_SUBDIR_NAME = "rocksdb_native_logs";
+    private static final int FIXED_PREFIX_BYTES = 22;
 
     @Override
     public DBOptions createDBOptions(DBOptions currentOptions, Collection<AutoCloseable> handlesToClose) {
@@ -185,15 +186,19 @@ public class CustomRocksDBOptionsFactory implements RocksDBOptionsFactory {
             .orElseThrow(() -> new IllegalStateException("Block cache not found in handlesToClose"));
 
         BlockBasedTableConfig tableConfig = resolveBlockBasedTableConfig(currentOptions);
+        BloomFilter bloomFilter = new BloomFilter(10, false);
+        handlesToClose.add(bloomFilter);
         tableConfig
             .setCacheIndexAndFilterBlocks(CACHE_INDEX_AND_FILTER_BLOCKS)
             .setCacheIndexAndFilterBlocksWithHighPriority(CACHE_INDEX_AND_FILTER_BLOCKS_WITH_HIGH_PRIORITY)
             .setPinL0FilterAndIndexBlocksInCache(PIN_L0_FILTER_AND_INDEX_BLOCKS)
             .setPinTopLevelIndexAndFilter(PIN_TOP_LEVEL_INDEX_AND_FILTER)
             .setPartitionFilters(USE_PARTITIONED_INDEX_FILTERS)
+            .setFilterPolicy(bloomFilter)
+            .setWholeKeyFiltering(false)
             .setBlockCache(blockCache);
 
-        return currentOptions
+        ColumnFamilyOptions configured = currentOptions
             // Write Path Config
             .setWriteBufferSize(WRITE_BUFFER_SIZE)
             .setMaxWriteBufferNumber(MAX_WRITE_BUFFER_NUMBER)
@@ -205,6 +210,17 @@ public class CustomRocksDBOptionsFactory implements RocksDBOptionsFactory {
 
             // Table Format Config
             .setTableFormatConfig(tableConfig);
+        applyFixedPrefixExtractorIfConfigured(configured);
+        return configured;
+    }
+
+    @Override
+    public ReadOptions createReadOptions(
+            ReadOptions currentOptions, Collection<AutoCloseable> handlesToClose) {
+        // Keep iterators in prefix mode so seek/startBytes can leverage the fixed-length extractor.
+        return currentOptions
+                .setPrefixSameAsStart(true)
+                .setTotalOrderSeek(false);
     }
 
     private static BlockBasedTableConfig resolveBlockBasedTableConfig(ColumnFamilyOptions currentOptions) {
@@ -289,6 +305,15 @@ public class CustomRocksDBOptionsFactory implements RocksDBOptionsFactory {
     private static long calculateFlinkWriteBufferManagerCapacity(long perSlotManagedBytes) {
         long sanitized = Math.max(perSlotManagedBytes, 1L);
         return (long) ((2 * sanitized * WRITE_BUFFER_RATIO) / 3);
+    }
+
+    private static void applyFixedPrefixExtractorIfConfigured(ColumnFamilyOptions options) {
+        if (FIXED_PREFIX_BYTES <= 0) {
+            return;
+        }
+        LOG.info("Enabling fixed-length prefix extractor ({} bytes) for q9_unique state CFs.", FIXED_PREFIX_BYTES);
+        options.useFixedLengthPrefixExtractor(FIXED_PREFIX_BYTES);
+        options.setOptimizeFiltersForHits(true);
     }
 
     private static final class FlinkManagedMemoryStats {
