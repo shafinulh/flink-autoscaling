@@ -1,20 +1,18 @@
 # runtime 
-nexmark/
-nexmark-2_0-latest/
-justin-custom-flink/*.jar
-flink_1.20_src/
-flink_1-20_build/
-flink/
-flink-justin/
-containerd/
-kafka
-kafka_2.13-3.7.2/
-rocksdb/
-scaling-logs/
+/nexmark/
+/nexmark-2_0-latest/
+/justin-custom-flink/*.jar
+/flink_1-20_src/
+/flink_1-20_build/
+/flink/
+/flink-justin/
+/containerd/
+/kafka
+/kafka_2.13-3.7.2/
+/rocksdb/
+/scaling-logs/
 /node-v16.13.2/
 /cni
-
-benchmark/mrc-gen/
 
 
 # build/cache artifacts
@@ -27,6 +25,14 @@ analysis/figures/
 *.log
 time,uptime,level*
 
+# experiment outputs
+benchmark/mrc-gen/**/exp-*/
+
 # tooling
 .DS_Store
 .idea/
+scripts/env.local.sh
+
+# personal files
+/analysis/
+/fall-sem-report/
