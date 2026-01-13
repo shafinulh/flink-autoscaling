@@ -27,6 +27,7 @@ time,uptime,level*
 
 # experiment outputs
 benchmark/mrc-gen/**/exp-*/
+benchmark/managed-mem-sensitivity/**/exp-*/
 
 # lsm viewer generated data
 /rocksdb-flink-stats-viewer/__pycache__/

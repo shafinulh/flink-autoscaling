@@ -18,14 +18,14 @@
 
 cluster.evenly-spread-out-slots: true
 
-taskmanager.memory.process.size: 2g
+taskmanager.memory.process.size: 8g
 taskmanager.cpu.cores: 4
 taskmanager.numberOfTaskSlots: 4
 parallelism.default: 1
 
 jobmanager.rpc.address: 142.150.234.180
 jobmanager.rpc.port: 6123
-jobmanager.memory.process.size: 4G
+jobmanager.memory.process.size: 8G
 io.tmp.dirs: /tmp
 
 rest.profiling.enabled: true
@@ -54,9 +54,9 @@ state.backend.type: rocksdb
 state.backend.rocksdb.memory.managed: false
 state.backend.rocksdb.options-factory: com.example.CustomRocksDBOptionsFactory
 # Enable RocksDB bloom filters so negative lookups don't fan out to every SSTable.
-#state.backend.rocksdb.use-bloom-filter: true
-#state.backend.rocksdb.bloom-filter.bits-per-key: 10.0
-#state.backend.rocksdb.bloom-filter.block-based-mode: true
+# state.backend.rocksdb.use-bloom-filter: true
+# state.backend.rocksdb.bloom-filter.bits-per-key: 10.0
+# state.backend.rocksdb.bloom-filter.block-based-mode: false
 # execution.checkpointing.incremental: true
 # for example, hdfs://benchmark01/checkpoint
 state.checkpoints.dir: file:///data/flink-state/checkpoints
