@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RocksDB LSM Timeline</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="top">
+        <div>
+          <div class="title">RocksDB LSM Timeline</div>
+          <div class="subtitle">Scrub through flushes, compactions, and stats dumps.</div>
+        </div>
+        <div class="experiment">
+          <label for="experiment-select">Experiment</label>
+          <select id="experiment-select"></select>
+        </div>
+        <div class="meta" id="meta-summary">Loading...</div>
+      </header>
+
+      <section class="section charts" id="charts-section">
+        <div class="section-title">Time Series</div>
+        <div class="chart-controls">
+          <div class="chart-controls-label">Markers</div>
+          <label class="marker-toggle">
+            <input id="toggle-flush-end" type="checkbox" checked />
+            <span class="marker-dot flush-end"></span>
+            Flush end
+          </label>
+          <label class="marker-toggle">
+            <input id="toggle-compaction-end" type="checkbox" checked />
+            <span class="marker-dot compaction-end"></span>
+            Compaction end
+          </label>
+          <label class="marker-toggle">
+            <input id="toggle-stats-dump" type="checkbox" checked />
+            <span class="marker-dot stats-dump"></span>
+            Stats dump
+          </label>
+        </div>
+        <div class="chart-grid">
+          <div class="chart-panel">
+            <div class="chart-header">
+              <div class="chart-title">Source Throughput</div>
+              <div class="chart-meta" id="throughput-meta"></div>
+            </div>
+            <div class="chart-body">
+              <div class="chart-canvas" id="throughput-chart"></div>
+            </div>
+          </div>
+          <div class="chart-panel">
+            <div class="chart-header">
+              <div class="chart-title">Block Cache Hit Ratio</div>
+              <div class="chart-meta" id="hitratio-meta"></div>
+            </div>
+            <div class="chart-body">
+              <div class="chart-canvas" id="hitratio-chart"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="lsm-section">
+        <div class="section-title">LSM Timeline</div>
+        <div class="controls">
+          <button class="btn" id="lsm-prev-btn" type="button" title="Previous frame">Prev</button>
+          <button class="btn primary" id="lsm-play-btn" type="button">Play</button>
+          <button class="btn" id="lsm-next-btn" type="button" title="Next frame">Next</button>
+          <div class="slider-wrap">
+            <input id="lsm-frame-slider" type="range" min="0" max="0" step="1" value="0" />
+          </div>
+          <div class="speed">
+            <label for="lsm-speed-select">Speed</label>
+            <select id="lsm-speed-select">
+              <option value="0.5">0.5x</option>
+              <option value="1" selected>1x</option>
+              <option value="2">2x</option>
+              <option value="4">4x</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section class="panels">
+        <div class="panel" id="left-panel">
+          <div class="panel-title">Left CF</div>
+          <div class="levels" id="left-levels"></div>
+        </div>
+        <div class="panel" id="right-panel">
+          <div class="panel-title">Right CF</div>
+          <div class="levels" id="right-levels"></div>
+        </div>
+      </section>
+
+      <section class="details">
+        <div class="details-title">Event Details</div>
+        <div class="details-grid" id="lsm-details"></div>
+      </section>
+
+      <section class="section stats">
+        <div class="section-title">Stats Timeline</div>
+        <div class="controls stats-controls">
+          <button class="btn" id="stats-prev-btn" type="button" title="Previous dump">Prev</button>
+          <button class="btn primary" id="stats-play-btn" type="button">Play</button>
+          <button class="btn" id="stats-next-btn" type="button" title="Next dump">Next</button>
+          <div class="slider-wrap">
+            <input id="stats-end-slider" type="range" min="0" max="0" step="1" value="0" />
+          </div>
+          <div class="speed">
+            <label for="stats-speed-select">Speed</label>
+            <select id="stats-speed-select">
+              <option value="0.5">0.5x</option>
+              <option value="1" selected>1x</option>
+              <option value="2">2x</option>
+              <option value="4">4x</option>
+            </select>
+          </div>
+        </div>
+        <div class="range-controls">
+          <label class="range-toggle">
+            <input id="stats-from-start" type="checkbox" checked />
+            From start
+          </label>
+          <div class="range-sliders">
+            <div class="range-item">
+              <label for="stats-start-slider">Start dump</label>
+              <input id="stats-start-slider" type="range" min="0" max="0" step="1" value="0" />
+            </div>
+          </div>
+          <div class="range-summary" id="stats-summary">No stats loaded.</div>
+        </div>
+        <div class="stats-panels">
+          <div class="stats-panel">
+            <div class="panel-title">Counters (Delta)</div>
+            <div class="stats-grid" id="stats-counters"></div>
+          </div>
+          <div class="stats-panel">
+            <div class="panel-title">Histograms (Latest)</div>
+            <div class="hist-table" id="stats-histograms"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
