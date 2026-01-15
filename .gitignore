@@ -34,10 +34,12 @@ benchmark/managed-mem-sensitivity/**/exp-*/
 /rocksdb-flink-stats-viewer/static/data/
 /rocksdb-flink-stats-viewer/static/data.json
 /rocksdb-flink-stats-viewer/static/index.json
+/rocksdb-flink-stats-viewer/
 /rocksdb-flink-stats-viewer-v2/__pycache__/
 /rocksdb-flink-stats-viewer-v2/static/data/
 /rocksdb-flink-stats-viewer-v2/static/data.json
 /rocksdb-flink-stats-viewer-v2/static/index.json
+/rocksdb-flink-stats-viewer-v2/
 
 # tooling
 .DS_Store
