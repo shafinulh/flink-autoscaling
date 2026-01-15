@@ -8,4 +8,19 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 source "${SCRIPT_DIR}/env.sh"
 
 log "Copying tracked Flink config into ${FLINK_HOME}"
-maybe_sudo cp "${REPO_ROOT}/configs/flink/flink-conf.yaml" "${FLINK_HOME}/conf/flink-conf.yaml"
+CONFIG_VERSION="${1:-}"
+CONFIG_FILE="${REPO_ROOT}/configs/flink/flink-conf.yaml"
+
+case "${CONFIG_VERSION}" in
+  "" )
+    ;;
+  v2 )
+    CONFIG_FILE="${REPO_ROOT}/configs/flink/flink-conf-v2.yaml"
+    ;;
+  * )
+    echo "Usage: $(basename "$0") [v2]" >&2
+    exit 2
+    ;;
+esac
+
+maybe_sudo cp "${CONFIG_FILE}" "${FLINK_HOME}/conf/flink-conf.yaml"
