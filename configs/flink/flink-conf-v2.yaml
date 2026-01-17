@@ -18,9 +18,9 @@
 
 cluster.evenly-spread-out-slots: true
 
-taskmanager.memory.process.size: 8g
+taskmanager.memory.process.size: 3g
 taskmanager.cpu.cores: 4
-taskmanager.numberOfTaskSlots: 1
+taskmanager.numberOfTaskSlots: 4
 parallelism.default: 1
 
 jobmanager.rpc.address: 142.150.234.180
@@ -52,7 +52,7 @@ state.backend.type: rocksdb
 # state.backend.rocksdb.memory.write-buffer-ratio: 0.5
 # state.backend.rocksdb.memory.high-prio-pool-ratio: 0.1
 state.backend.rocksdb.memory.managed: true
-state.backend.rocksdb.options-factory: com.example.DirectIORocksDBOptionsFactory
+state.backend.rocksdb.options-factory: com.example.DirectIORocksDBOptionsFactoryIndexBloomPrefix
 # Enable RocksDB bloom filters so negative lookups don't fan out to every SSTable.
 # state.backend.rocksdb.use-bloom-filter: true
 # state.backend.rocksdb.bloom-filter.bits-per-key: 10.0
@@ -60,27 +60,25 @@ state.backend.rocksdb.options-factory: com.example.DirectIORocksDBOptionsFactory
 # execution.checkpointing.incremental: true
 # for example, hdfs://benchmark01/checkpoint
 state.checkpoints.dir: file:///mnt/home/haques24/flink-state
-execution.checkpointing.interval: 30000
-execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
+execution.checkpointing.interval: 18000000
 execution.checkpointing.savepoint-dir: file:///mnt/home/haques24/flink-state/savepoints
 state.backend.rocksdb.localdir: /data/rocksdb
-state.backend.incremental: true
-# execution.checkpointing.interval: 180000
+execution.checkpointing.incremental: true
 execution.checkpointing.mode: EXACTLY_ONCE
-state.backend.local-recovery: true  
+state.backend.local-recovery: true
 
 #==============================================================================
 # Runtime Others
 #==============================================================================
 
 # configuration options for adjusting and tuning table programs.
-table.exec.mini-batch.enabled: true
-table.exec.mini-batch.allow-latency: 2s
-table.exec.mini-batch.size: 50000
-table.optimizer.distinct-agg.split.enabled: true
+# table.exec.mini-batch.enabled: true
+# table.exec.mini-batch.allow-latency: 2s
+# table.exec.mini-batch.size: 50000
+# table.optimizer.distinct-agg.split.enabled: true
 
 # disable final checkpoint to avoid test waiting for the last checkpoint complete
-execution.checkpointing.checkpoints-after-tasks-finish.enabled: false
+# execution.checkpointing.checkpoints-after-tasks-finish.enabled: false
 
 #==============================================================================
 # Metrics

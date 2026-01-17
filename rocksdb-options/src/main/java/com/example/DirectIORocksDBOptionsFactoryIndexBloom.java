@@ -1,10 +1,10 @@
 package com.example;
 
-public class DirectIORocksDBOptionsFactory extends BaseDirectIORocksDBOptionsFactory {
+public class DirectIORocksDBOptionsFactoryIndexBloom extends BaseDirectIORocksDBOptionsFactory {
 
     @Override
     protected boolean enableBloomFilters() {
-        return false;
+        return true;
     }
 
     @Override
@@ -14,6 +14,6 @@ public class DirectIORocksDBOptionsFactory extends BaseDirectIORocksDBOptionsFac
 
     @Override
     protected boolean enableIndexOptimization() {
-        return false;
+        return true;
     }
 }

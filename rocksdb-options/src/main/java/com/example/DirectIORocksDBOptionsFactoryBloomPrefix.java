@@ -1,15 +1,15 @@
 package com.example;
 
-public class DirectIORocksDBOptionsFactory extends BaseDirectIORocksDBOptionsFactory {
+public class DirectIORocksDBOptionsFactoryBloomPrefix extends BaseDirectIORocksDBOptionsFactory {
 
     @Override
     protected boolean enableBloomFilters() {
-        return false;
+        return true;
     }
 
     @Override
     protected boolean enablePrefixFilters() {
-        return false;
+        return true;
     }
 
     @Override
