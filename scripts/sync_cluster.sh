@@ -8,9 +8,9 @@ source "${SCRIPT_DIR}/env.sh"
 
 for host in $WORKER_HOSTS; do
   log "Syncing Flink to ${host}"
-  maybe_sudo rsync -az "${FLINK_HOME}/" "${SSH_USER}@${host}:${FLINK_HOME}/"
+  maybe_sudo rsync -az --delete "${FLINK_HOME}/" "${SSH_USER}@${host}:${FLINK_HOME}/"
 
   log "Syncing Nexmark to ${host}"
-  maybe_sudo rsync -az "${NEXMARK_HOME}/" "${SSH_USER}@${host}:${NEXMARK_HOME}/"
+  maybe_sudo rsync -az --delete "${NEXMARK_HOME}/" "${SSH_USER}@${host}:${NEXMARK_HOME}/"
 
 done
