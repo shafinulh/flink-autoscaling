@@ -30,6 +30,7 @@ benchmark/mrc-gen/**/exp-*/
 benchmark/managed-mem-sensitivity/**/exp-*/
 benchmark/query-runner-v3-savepoint/**/exp-*/
 benchmark/query-runner-v3-savepoint/savepoint-*/
+benchmark/query-runner-v2/*/
 
 # lsm viewer generated data
 /rocksdb-flink-stats-viewer/__pycache__/
