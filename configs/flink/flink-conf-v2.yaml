@@ -51,8 +51,8 @@ state.backend.type: rocksdb
 # taskmanager.memory.managed.fraction: 0.4
 # state.backend.rocksdb.memory.write-buffer-ratio: 0.5
 # state.backend.rocksdb.memory.high-prio-pool-ratio: 0.1
-state.backend.rocksdb.memory.managed: true
-state.backend.rocksdb.options-factory: com.example.DirectIORocksDBOptionsFactoryIndexBloomPrefix
+state.backend.rocksdb.memory.managed: false
+state.backend.rocksdb.options-factory: com.example.CustomRocksDBOptionsFactory
 # Enable RocksDB bloom filters so negative lookups don't fan out to every SSTable.
 # state.backend.rocksdb.use-bloom-filter: true
 # state.backend.rocksdb.bloom-filter.bits-per-key: 10.0
@@ -66,6 +66,15 @@ state.backend.rocksdb.localdir: /data/rocksdb
 execution.checkpointing.incremental: true
 execution.checkpointing.mode: EXACTLY_ONCE
 state.backend.local-recovery: true
+
+# #==============================================================================
+# # RocksDB block cache trace
+# #==============================================================================
+
+# state.backend.rocksdb.block-cache-trace.enabled: true
+# state.backend.rocksdb.block-cache-trace.dir: /data/rocksdb/block-cache-traces
+# state.backend.rocksdb.block-cache-trace.max-file-size: 10gb
+# state.backend.rocksdb.block-cache-trace.sync-file: false
 
 #==============================================================================
 # Runtime Others

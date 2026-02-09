@@ -18,7 +18,7 @@
 
 cluster.evenly-spread-out-slots: true
 
-taskmanager.memory.process.size: 8g
+taskmanager.memory.process.size: 2g
 taskmanager.cpu.cores: 4
 taskmanager.numberOfTaskSlots: 4
 parallelism.default: 1
@@ -51,8 +51,8 @@ state.backend.type: rocksdb
 # taskmanager.memory.managed.fraction: 0.4
 # state.backend.rocksdb.memory.write-buffer-ratio: 0.5
 # state.backend.rocksdb.memory.high-prio-pool-ratio: 0.1
-state.backend.rocksdb.memory.managed: false
-state.backend.rocksdb.options-factory: com.example.CustomRocksDBOptionsFactory
+state.backend.rocksdb.memory.managed: true
+state.backend.rocksdb.options-factory: com.example.DirectIORocksDBOptionsFactory
 # Enable RocksDB bloom filters so negative lookups don't fan out to every SSTable.
 # state.backend.rocksdb.use-bloom-filter: true
 # state.backend.rocksdb.bloom-filter.bits-per-key: 10.0
@@ -88,9 +88,9 @@ metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.Prometh
 metrics.reporter.prom.port: 9249-9260
 
 # Enable per-operator latency tracking so we can see state access histograms
-state.backend.latency-track.keyed-state-enabled: true
-state.backend.latency-track.sample-interval: 10
-state.backend.latency-track.history-size: 10000
+# state.backend.latency-track.keyed-state-enabled: true
+# state.backend.latency-track.sample-interval: 10
+# state.backend.latency-track.history-size: 10000
 
 # Expose RocksDB cache, memory, and compaction statistics for Prometheus/Grafana.
 # memory related - rocksdb block cache

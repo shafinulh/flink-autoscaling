@@ -28,8 +28,8 @@ time,uptime,level*
 # experiment outputs
 benchmark/mrc-gen/**/exp-*/
 benchmark/managed-mem-sensitivity/**/exp-*/
-benchmark/query-runner-v3-savepoint/**/exp-*/
-benchmark/query-runner-v3-savepoint/savepoint-*/
+benchmark/query-runner-v2-savepoint/**/exp-*/
+benchmark/query-runner-v2-savepoint/savepoint-*/
 benchmark/query-runner-v2/*/
 
 # lsm viewer generated data

@@ -23,11 +23,14 @@ public class CustomRocksDBOptionsFactory implements RocksDBOptionsFactory {
     // TODO: add mode where no WBM is used? RocksDB will allocate memory independently per ColumnFamily?
     private enum MemoryProvisioningMode {
         FLINK_MANAGED,
+        FLINK_MANAGED_FINAL_EXPERIMENTS,
         FLINK_MANAGED_INDEP,
         MANUAL_INDEP,
         MANUAL_CHARGED
     }
-    private static final MemoryProvisioningMode MEMORY_MODE = MemoryProvisioningMode.MANUAL_INDEP;
+    // private static final MemoryProvisioningMode MEMORY_MODE = MemoryProvisioningMode.MANUAL_INDEP;
+    // private static final MemoryProvisioningMode MEMORY_MODE = MemoryProvisioningMode.FLINK_MANAGED;
+    private static final MemoryProvisioningMode MEMORY_MODE = MemoryProvisioningMode.FLINK_MANAGED_FINAL_EXPERIMENTS;
 
     // ----------------------------
     // Flink-managed memory inputs
@@ -35,7 +38,10 @@ public class CustomRocksDBOptionsFactory implements RocksDBOptionsFactory {
     private static final double WRITE_BUFFER_RATIO = 0.5;
     private static final double HIGH_PRIORITY_POOL_RATIO = 0.1;
     // numShardBits = -1 means it is automatically determined: every shard will be at least 512KB and number of shard bits will not exceed 6
-    private static final int DEFAULT_BLOCK_CACHE_SHARD_BITS = 2;
+    private static final int DEFAULT_BLOCK_CACHE_SHARD_BITS = 6;
+    
+    // For FINAL_EXPERIMENTS: override the calculated Flink-managed WBM capacity with a fixed value.
+    private static final long FLINK_MANAGED_FINAL_WRITE_BUFFER_CAPACITY_BYTES = 140L * 1024 * 1024;
 
     // fallback config values used when we cannot discover real TaskExecutor settings
     private static final long FALLBACK_TOTAL_FLINK_MEMORY_BYTES = (long) (1.55 * 1024 * 1024 * 1024L);
@@ -74,22 +80,28 @@ public class CustomRocksDBOptionsFactory implements RocksDBOptionsFactory {
     private static final int MAX_SUBCOMPACTIONS = 1;
 
     // read path block cache settings
-    private static final boolean CACHE_INDEX_AND_FILTER_BLOCKS = true;
-    private static final boolean CACHE_INDEX_AND_FILTER_BLOCKS_WITH_HIGH_PRIORITY = true;
-    private static final boolean PIN_L0_FILTER_AND_INDEX_BLOCKS = true;
-    private static final boolean PIN_TOP_LEVEL_INDEX_AND_FILTER = true;
+    private static final boolean CACHE_INDEX_AND_FILTER_BLOCKS = false;
+    private static final boolean CACHE_INDEX_AND_FILTER_BLOCKS_WITH_HIGH_PRIORITY = false;
+    private static final boolean PIN_L0_FILTER_AND_INDEX_BLOCKS = false;
+    private static final boolean PIN_TOP_LEVEL_INDEX_AND_FILTER = false;
     private static final boolean USE_PARTITIONED_INDEX_FILTERS = false;
 
     // stat dumps to see histogram types
     private static final boolean ENABLE_STATS_DUMP = true;
     private static final int STATS_DUMP_PERIOD_SEC = 300;
-    private static final String ROCKSDB_LOG_SUBDIR_NAME = "rocksdb_native_logs";
+    private static final String ROCKSDB_LOG_DIR = "/data/rocksdb_native_logs";
     private static final int FIXED_PREFIX_BYTES = 22;
 
     @Override
     public DBOptions createDBOptions(DBOptions currentOptions, Collection<AutoCloseable> handlesToClose) {
         MemoryLayout layout = resolveMemoryLayout();
 
+        // long blockCacheCapacityBytes = layout.blockCacheCapacityBytes;
+        // if (MEMORY_MODE == MemoryProvisioningMode.FLINK_MANAGED_INDEP) {
+        //     // Keep block cache + WBM within the single managed-memory budget.
+        //     blockCacheCapacityBytes =
+        //         Math.max(1L, blockCacheCapacityBytes - layout.writeBufferManagerCapacityBytes);
+        // }
         Cache blockCache = new LRUCache(
             layout.blockCacheCapacityBytes,
             layout.blockCacheShardBits,
@@ -116,6 +128,7 @@ public class CustomRocksDBOptionsFactory implements RocksDBOptionsFactory {
         statistics.setStatsLevel(StatsLevel.ALL);
         handlesToClose.add(statistics);
 
+        configureDbLogDir(currentOptions);
         enableStatsDump(currentOptions);
         return currentOptions
             // Use the WriteBufferManager instead of letting each CF allocate independently
@@ -240,6 +253,8 @@ public class CustomRocksDBOptionsFactory implements RocksDBOptionsFactory {
         switch (MEMORY_MODE) {
             case FLINK_MANAGED:
                 return buildFlinkManagedLayout(true);
+            case FLINK_MANAGED_FINAL_EXPERIMENTS:
+                return buildFlinkManagedFinalExperimentsLayout(true);
             case FLINK_MANAGED_INDEP:
                 return buildFlinkManagedLayout(false);
             case MANUAL_INDEP:
@@ -282,19 +297,42 @@ public class CustomRocksDBOptionsFactory implements RocksDBOptionsFactory {
         );
     }
 
+    private static MemoryLayout buildFlinkManagedFinalExperimentsLayout(
+            boolean chargeWriteBuffersToCache) {
+        FlinkManagedMemoryStats stats = ManagedMemoryIntrospector.resolve();
+        long perSlotManagedBytes = stats.perSlotManagedMemoryBytes();
+        long blockCacheCapacity = calculateFlinkBlockCacheCapacity(perSlotManagedBytes);
+        long writeBufferCapacity = FLINK_MANAGED_FINAL_WRITE_BUFFER_CAPACITY_BYTES;
+        if (LOG.isDebugEnabled()) {
+            LOG.debug(
+                "Using Flink-managed memory (final experiments): total={} bytes, slots={}, perSlot={} bytes, fixedWbm={} bytes, chargeWbm={}",
+                stats.totalManagedMemoryBytes,
+                stats.taskSlotsPerTm,
+                perSlotManagedBytes,
+                writeBufferCapacity,
+                chargeWriteBuffersToCache);
+        }
+        return new MemoryLayout(
+            blockCacheCapacity,
+            DEFAULT_BLOCK_CACHE_SHARD_BITS,
+            writeBufferCapacity,
+            chargeWriteBuffersToCache // false means block cache + WBM operate independently
+        );
+    }
+
     private static void enableStatsDump(DBOptions options) {
         if (!ENABLE_STATS_DUMP) {
             return;
         }
         options.setStatsDumpPeriodSec(STATS_DUMP_PERIOD_SEC);
-        // String flinkLogDirEnv = System.getenv("FLINK_LOG_DIR");
-        // String baseLogDir = (flinkLogDirEnv != null && !flinkLogDirEnv.isEmpty()) ? flinkLogDirEnv : ".";
-        // String rocksDbInstanceLogPath = baseLogDir + File.separator + ROCKSDB_LOG_SUBDIR_NAME;
-        // File rocksDbLogDirFile = new File(rocksDbInstanceLogPath);
-        // if (!rocksDbLogDirFile.exists()) {
-        //     rocksDbLogDirFile.mkdirs();
-        // }
-        // options.setDbLogDir(rocksDbInstanceLogPath);
+    }
+
+    private static void configureDbLogDir(DBOptions options) {
+        File dir = new File(ROCKSDB_LOG_DIR);
+        if (!dir.exists() && !dir.mkdirs()) {
+            return;
+        }
+        options.setDbLogDir(ROCKSDB_LOG_DIR);
     }
 
     private static long calculateFlinkBlockCacheCapacity(long perSlotManagedBytes) {

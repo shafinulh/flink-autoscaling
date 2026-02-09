@@ -4,7 +4,7 @@ set -euo pipefail
 
 JOB_NAME="q20_unique"
 
-PROFILE_DELAY_SECONDS=$((17 * 60))
+PROFILE_DELAY_SECONDS=$((10 * 60))
 PROFILE_DURATION_SECONDS=$((5 * 60))
 PROFILE_MODE="${PROFILE_MODE:-WALL}"
 PROFILE_SCOPE="${PROFILE_SCOPE:-taskmanager}"
@@ -12,7 +12,7 @@ PROFILE_TM_ID="${PROFILE_TM_ID:-}"
 
 COOLDOWN_SECONDS=60
 
-DEST_ROOT="/opt/benchmark/query-runner-v3-savepoint"
+DEST_ROOT="/opt/benchmark/query-runner-v2-savepoint"
 
 LOG_HOSTS=(c182 c155 c167)
 SSH_USER="${SSH_USER:-root}"
@@ -20,7 +20,8 @@ SSH_USER="${SSH_USER:-root}"
 FLINK_BIN="/opt/flink/bin"
 NEXMARK_BIN="/opt/nexmark/bin"
 RUN_QUERY_CMD="${NEXMARK_BIN}/run_query.sh"
-FLINK_CONF_FILE="/opt/configs/flink/flink-conf-v2.yaml"
+FLINK_CONF_SUFFIX="${FLINK_CONF_SUFFIX:-v2-tracer}"
+FLINK_CONF_FILE=""
 APPLY_CONFIG_CMD="/opt/scripts/apply_flink_config.sh"
 SYNC_CLUSTER_CMD="/opt/scripts/sync_cluster.sh"
 
@@ -45,11 +46,11 @@ log_err() {
 
 usage() {
   cat <<'USAGE'
-Usage: run_query_runner_v3_savepoint_sweep.sh SAVEPOINT EXPERIMENT_NAME TM_MEMORY_SIZES...
+Usage: run_query_runner_v2_savepoint_sweep.sh [--flink-conf-suffix SUFFIX] SAVEPOINT EXPERIMENT_NAME TM_MEMORY_SIZES...
 
 Examples:
-  run_query_runner_v3_savepoint_sweep.sh savepoint-38aaf1-4aa879b3262f 8g-all-optimizations-4-slots 3g 3g 6g 8g
-  run_query_runner_v3_savepoint_sweep.sh file:///mnt/home/haques24/flink-state/savepoints/savepoint-38aaf1-4aa879b3262f my-exp 8g 6g
+  run_query_runner_v2_savepoint_sweep.sh --flink-conf-suffix v2-tracer savepoint-38aaf1-4aa879b3262f 8g-all-optimizations-4-slots 3g 3g 6g 8g
+  run_query_runner_v2_savepoint_sweep.sh -c v3 file:///mnt/home/haques24/flink-state/savepoints/savepoint-38aaf1-4aa879b3262f my-exp 8g 6g
 USAGE
 }
 
@@ -96,7 +97,11 @@ update_flink_conf() {
 
 apply_flink_conf() {
   if [[ -x "$APPLY_CONFIG_CMD" ]]; then
-    "$APPLY_CONFIG_CMD" v2
+    if [[ -n "$FLINK_CONF_SUFFIX" ]]; then
+      "$APPLY_CONFIG_CMD" "$FLINK_CONF_SUFFIX"
+    else
+      "$APPLY_CONFIG_CMD"
+    fi
   else
     cp "$FLINK_CONF_FILE" "/opt/flink/conf/flink-conf.yaml"
   fi
@@ -155,7 +160,9 @@ write_metadata() {
     echo "profile_duration_seconds=${PROFILE_DURATION_SECONDS}"
     echo "created_at=$(date -Is)"
   } > "$meta_file"
-  cp "$FLINK_CONF_FILE" "${run_dir}/flink-conf-v2.yaml"
+  local conf_basename=""
+  conf_basename=$(basename "$FLINK_CONF_FILE")
+  cp "$FLINK_CONF_FILE" "${run_dir}/${conf_basename}"
 }
 
 collect_rocksdb_logs() {
@@ -166,12 +173,12 @@ collect_rocksdb_logs() {
 
   for host in "${LOG_HOSTS[@]}"; do
     log "Checking ${host} for RocksDB logs..." | tee -a "$log_file"
-    local remote_listing=""
-    if ! remote_listing=$(ssh "${SSH_USER}@${host}" 'for f in /data/rocksdb_native_logs/*; do [ -e "$f" ] || continue; echo "$f"; done' 2>&1); then
-      log "Log scan failed on ${host}: ${remote_listing}" | tee -a "$log_file"
-      remote_listing=""
+    local has_logs=""
+    if ! has_logs=$(ssh "${SSH_USER}@${host}" 'find /data/rocksdb_native_logs -mindepth 1 -maxdepth 1 -print -quit' 2>&1); then
+      log "Log scan failed on ${host}: ${has_logs}" | tee -a "$log_file"
+      has_logs=""
     fi
-    if [[ -z "$remote_listing" ]]; then
+    if [[ -z "$has_logs" ]]; then
       log "No RocksDB logs found in /data/rocksdb_native_logs on ${host}" | tee -a "$log_file"
       log "Recent /data/rocksdb_native_logs entries on ${host} (tail -n 20):" | tee -a "$log_file"
       local remote_ls=""
@@ -182,16 +189,12 @@ collect_rocksdb_logs() {
       fi
       continue
     fi
-    while IFS= read -r remote_file; do
-      [[ -z "$remote_file" ]] && continue
-      local base
-      base=$(basename "$remote_file")
-      local dest_file="${stats_dir}/${base}_${host}"
-      log "Copying ${remote_file} from ${host} -> ${dest_file}" | tee -a "$log_file"
-      scp "${SSH_USER}@${host}:${remote_file}" "$dest_file"
-      log "Removing ${remote_file} from ${host} after copy." | tee -a "$log_file"
-      ssh "${SSH_USER}@${host}" "rm -f \"$remote_file\""
-    done <<< "$remote_listing"
+    local host_dir="${stats_dir}/${host}"
+    mkdir -p "$host_dir"
+    log "Copying /data/rocksdb_native_logs from ${host} -> ${host_dir}" | tee -a "$log_file"
+    scp -r "${SSH_USER}@${host}:/data/rocksdb_native_logs/." "${host_dir}/"
+    log "Removing /data/rocksdb_native_logs contents from ${host} after copy." | tee -a "$log_file"
+    ssh "${SSH_USER}@${host}" 'find /data/rocksdb_native_logs -mindepth 1 -maxdepth 1 -exec rm -rf {} +'
   done
 }
 
@@ -218,6 +221,23 @@ require_tools() {
       return 1
     fi
   done
+}
+
+resolve_flink_conf_file() {
+  local suffix=$1
+  local conf_root="/opt/configs/flink"
+  local candidate="${conf_root}/flink-conf.yaml"
+  if [[ -n "$suffix" ]]; then
+    candidate="${conf_root}/flink-conf-${suffix}.yaml"
+  fi
+  if [[ ! -f "$candidate" ]]; then
+    log_err "Unknown Flink config suffix: '${suffix}'"
+    log_err "Available suffixes:"
+    (cd "$conf_root" && ls -1 flink-conf*.yaml 2>/dev/null \
+      | awk '{if ($0=="flink-conf.yaml") {print "(none)"} else {gsub(/^flink-conf-/, "", $0); sub(/\\.yaml$/, "", $0); print $0}}') >&2
+    exit 2
+  fi
+  printf '%s' "$candidate"
 }
 
 discover_rest_url_from_logs() {
@@ -528,10 +548,43 @@ if [[ ${1:-} == "-h" || ${1:-} == "--help" ]]; then
   exit 0
 fi
 
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --flink-conf-suffix|-c)
+      shift
+      if [[ $# -eq 0 ]]; then
+        log_err "Missing value for --flink-conf-suffix"
+        usage
+        exit 2
+      fi
+      FLINK_CONF_SUFFIX="$1"
+      shift
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      log_err "Unknown option: $1"
+      usage
+      exit 2
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
 if [[ $# -lt 3 ]]; then
   usage
   exit 2
 fi
+
+FLINK_CONF_FILE=$(resolve_flink_conf_file "$FLINK_CONF_SUFFIX")
 
 SAVEPOINT_INPUT=$1
 EXPERIMENT_NAME=$2
@@ -604,4 +657,4 @@ for tm_idx in "${!TM_MEMORY_SIZES[@]}"; do
   fi
 done
 
-log "QueryRunnerV3 savepoint sweep complete."
+log "QueryRunnerV2 savepoint sweep complete."

@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-JOB_NAME="q9_unique"
+JOB_NAME="q20_unique"
 
 ENABLE_WALL_PROFILING=false
 PROFILE_DELAY_SECONDS=$((17 * 60))
