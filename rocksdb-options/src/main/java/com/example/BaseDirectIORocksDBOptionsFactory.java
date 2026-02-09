@@ -39,6 +39,10 @@ public abstract class BaseDirectIORocksDBOptionsFactory implements RocksDBOption
 
     protected abstract boolean enableIndexOptimization();
 
+    protected boolean cacheIndexAndFilterBlocksInBlockCache() {
+        return CACHE_INDEX_AND_FILTER_BLOCKS;
+    }
+
     @Override
     public DBOptions createDBOptions(DBOptions currentOptions, Collection<AutoCloseable> handlesToClose) {
         configureDbLogDir(currentOptions);
@@ -54,6 +58,7 @@ public abstract class BaseDirectIORocksDBOptionsFactory implements RocksDBOption
         boolean usePrefix = enablePrefixFilters();
         boolean useBloom = enableBloomFilters() || usePrefix;
         boolean useIndex = enableIndexOptimization();
+        boolean cacheIndexAndFilterBlocks = cacheIndexAndFilterBlocksInBlockCache();
 
         if (!useBloom && !useIndex) {
             return currentOptions;
@@ -61,10 +66,13 @@ public abstract class BaseDirectIORocksDBOptionsFactory implements RocksDBOption
 
         BlockBasedTableConfig tableConfig = resolveBlockBasedTableConfig(currentOptions);
         tableConfig
-            .setCacheIndexAndFilterBlocks(CACHE_INDEX_AND_FILTER_BLOCKS)
-            .setCacheIndexAndFilterBlocksWithHighPriority(CACHE_INDEX_AND_FILTER_BLOCKS_WITH_HIGH_PRIORITY)
-            .setPinL0FilterAndIndexBlocksInCache(PIN_L0_FILTER_AND_INDEX_BLOCKS)
-            .setPinTopLevelIndexAndFilter(PIN_TOP_LEVEL_INDEX_AND_FILTER)
+            .setCacheIndexAndFilterBlocks(cacheIndexAndFilterBlocks)
+            .setCacheIndexAndFilterBlocksWithHighPriority(
+                cacheIndexAndFilterBlocks && CACHE_INDEX_AND_FILTER_BLOCKS_WITH_HIGH_PRIORITY)
+            .setPinL0FilterAndIndexBlocksInCache(
+                cacheIndexAndFilterBlocks && PIN_L0_FILTER_AND_INDEX_BLOCKS)
+            .setPinTopLevelIndexAndFilter(
+                cacheIndexAndFilterBlocks && PIN_TOP_LEVEL_INDEX_AND_FILTER)
             .setIndexType(useIndex ? IndexType.kTwoLevelIndexSearch : IndexType.kBinarySearch)
             .setPartitionFilters(useIndex);
 
