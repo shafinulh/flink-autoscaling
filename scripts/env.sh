@@ -17,7 +17,7 @@ log() {
 
 maybe_sudo() {
   if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
-    sudo "$@"
+    sudo -E "$@"
   else
     "$@"
   fi

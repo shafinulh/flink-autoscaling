@@ -1,6 +1,5 @@
 # runtime 
 /nexmark/
-/nexmark-2_0-latest/
 /justin-custom-flink/*.jar
 /flink_1-20_build/
 /flink/
@@ -14,7 +13,6 @@
 /node-v16.13.2/
 /cni
 
-
 # build/cache artifacts
 analysis/__pycache__/
 *.pyc
@@ -25,9 +23,14 @@ analysis/figures/
 *.log
 time,uptime,level*
 
+#incomplete experiments
+/benchmark/flink-optimization-final
+/benchmark/q20u-custom-mem-sensitivity
+
 # experiment outputs
 benchmark/mrc-gen/**/exp-*/
 benchmark/managed-mem-sensitivity/**/exp-*/
+benchmark/managed-mem-sensitivity/test_fetch_async_profile
 benchmark/query-runner-v2-savepoint/**/exp-*/
 benchmark/query-runner-v2-savepoint/savepoint-*/
 benchmark/query-runner-v2/*/
