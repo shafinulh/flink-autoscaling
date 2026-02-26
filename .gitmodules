@@ -7,3 +7,6 @@
 [submodule "flink_1-20_src"]
 	path = flink_1-20_src
 	url = git@github.com:shafinulh/flink-1.20.0.git
+[submodule "flink-justin"]
+	path = flink-justin
+	url = https://github.com/shafinulh/flink-justin.git
