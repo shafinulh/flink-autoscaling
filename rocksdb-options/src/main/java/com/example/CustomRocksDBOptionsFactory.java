@@ -41,7 +41,7 @@ public class CustomRocksDBOptionsFactory implements RocksDBOptionsFactory {
     private static final int DEFAULT_BLOCK_CACHE_SHARD_BITS = 6;
     
     // For FINAL_EXPERIMENTS: override the calculated Flink-managed WBM capacity with a fixed value.
-    private static final long FLINK_MANAGED_FINAL_WRITE_BUFFER_CAPACITY_BYTES = 140L * 1024 * 1024;
+    private static final long FLINK_MANAGED_FINAL_WRITE_BUFFER_CAPACITY_BYTES = 192L * 1024 * 1024;
 
     // fallback config values used when we cannot discover real TaskExecutor settings
     private static final long FALLBACK_TOTAL_FLINK_MEMORY_BYTES = (long) (1.55 * 1024 * 1024 * 1024L);

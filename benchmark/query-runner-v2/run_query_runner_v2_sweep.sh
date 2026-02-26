@@ -2,10 +2,10 @@
 
 set -euo pipefail
 
-JOB_NAME="q20_unique"
+JOB_NAME="${JOB_NAME:-q20_unique}"
 
-ENABLE_WALL_PROFILING=false
-PROFILE_DELAY_SECONDS=$((17 * 60))
+ENABLE_WALL_PROFILING=true
+PROFILE_DELAY_SECONDS=$((30 * 60))
 PROFILE_DURATION_SECONDS=$((5 * 60))
 PROFILE_MODE="${PROFILE_MODE:-WALL}"
 PROFILE_SCOPE="${PROFILE_SCOPE:-taskmanager}"
@@ -93,7 +93,9 @@ update_flink_conf() {
       }
     }
   ' "$FLINK_CONF_FILE" > "$tmp_file"
-  mv "$tmp_file" "$FLINK_CONF_FILE"
+  # Overwrite in place to preserve existing ownership/permissions.
+  cat "$tmp_file" > "$FLINK_CONF_FILE"
+  rm -f "$tmp_file"
 }
 
 apply_flink_conf() {
@@ -586,10 +588,13 @@ shift
 
 TM_MEMORY_SIZES=("$@")
 
+RUN_DATE_MMDDHH=$(date +%m%d%H)
+
 experiment_label="${EXPERIMENT_NAME}-${JOB_NAME}"
 if [[ -n "$FLINK_CONF_SUFFIX" ]]; then
   experiment_label="${experiment_label}-${FLINK_CONF_SUFFIX}"
 fi
+experiment_label="${RUN_DATE_MMDDHH}-${experiment_label}"
 EXPERIMENT_ROOT="${DEST_ROOT}/${experiment_label}"
 
 mkdir -p "$EXPERIMENT_ROOT"
