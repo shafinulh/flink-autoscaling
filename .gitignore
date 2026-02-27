@@ -3,7 +3,7 @@
 /justin-custom-flink/*.jar
 /flink_1-20_build/
 /flink/
-/flink-justin/
+/flink-justin-old/
 /flink-from-remote-1-20/
 /containerd/
 /kafka
@@ -31,8 +31,8 @@ time,uptime,level*
 benchmark/mrc-gen/**/exp-*/
 benchmark/managed-mem-sensitivity/**/exp-*/
 benchmark/managed-mem-sensitivity/test_fetch_async_profile
-benchmark/query-runner-v2-savepoint/**/exp-*/
-benchmark/query-runner-v2-savepoint/savepoint-*/
+benchmark/query-runner-3-savepoint/**/exp-*/
+benchmark/query-runner-v3-savepoint/savepoint-*/
 benchmark/query-runner-v2/*/
 
 # lsm viewer generated data
