@@ -91,6 +91,7 @@ public class CustomRocksDBOptionsFactory implements RocksDBOptionsFactory {
     private static final int STATS_DUMP_PERIOD_SEC = 300;
     private static final String ROCKSDB_LOG_DIR = "/data/rocksdb_native_logs";
     private static final int FIXED_PREFIX_BYTES = 22;
+    private static final int BLOOM_FILTER_BITS_PER_KEY = 10;
 
     @Override
     public DBOptions createDBOptions(DBOptions currentOptions, Collection<AutoCloseable> handlesToClose) {
@@ -199,17 +200,15 @@ public class CustomRocksDBOptionsFactory implements RocksDBOptionsFactory {
             .orElseThrow(() -> new IllegalStateException("Block cache not found in handlesToClose"));
 
         BlockBasedTableConfig tableConfig = resolveBlockBasedTableConfig(currentOptions);
-        BloomFilter bloomFilter = new BloomFilter(10, false);
-        handlesToClose.add(bloomFilter);
         tableConfig
             .setCacheIndexAndFilterBlocks(CACHE_INDEX_AND_FILTER_BLOCKS)
             .setCacheIndexAndFilterBlocksWithHighPriority(CACHE_INDEX_AND_FILTER_BLOCKS_WITH_HIGH_PRIORITY)
             .setPinL0FilterAndIndexBlocksInCache(PIN_L0_FILTER_AND_INDEX_BLOCKS)
             .setPinTopLevelIndexAndFilter(PIN_TOP_LEVEL_INDEX_AND_FILTER)
             .setPartitionFilters(USE_PARTITIONED_INDEX_FILTERS)
-            .setFilterPolicy(bloomFilter)
             .setWholeKeyFiltering(false)
             .setBlockCache(blockCache);
+        applyBloomFilterIfConfigured(tableConfig, handlesToClose);
 
         ColumnFamilyOptions configured = currentOptions
             // Write Path Config
@@ -352,6 +351,17 @@ public class CustomRocksDBOptionsFactory implements RocksDBOptionsFactory {
         LOG.info("Enabling fixed-length prefix extractor ({} bytes) for q9_unique state CFs.", FIXED_PREFIX_BYTES);
         options.useFixedLengthPrefixExtractor(FIXED_PREFIX_BYTES);
         options.setOptimizeFiltersForHits(true);
+    }
+
+    private static void applyBloomFilterIfConfigured(
+            BlockBasedTableConfig tableConfig,
+            Collection<AutoCloseable> handlesToClose) {
+        if (BLOOM_FILTER_BITS_PER_KEY <= 0) {
+            return;
+        }
+        BloomFilter bloomFilter = new BloomFilter(BLOOM_FILTER_BITS_PER_KEY, false);
+        handlesToClose.add(bloomFilter);
+        tableConfig.setFilterPolicy(bloomFilter);
     }
 
     private static final class FlinkManagedMemoryStats {
