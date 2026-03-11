@@ -12,7 +12,7 @@ PROFILE_TM_ID="${PROFILE_TM_ID:-}"
 
 COOLDOWN_SECONDS=60
 
-DEST_ROOT="/opt/benchmark/query-runner-v2-savepoint"
+DEST_ROOT="/opt/benchmark/query-runner-v3-savepoint"
 
 LOG_HOSTS=(c182 c155 c167)
 SSH_USER="${SSH_USER:-root}"
@@ -20,7 +20,7 @@ SSH_USER="${SSH_USER:-root}"
 FLINK_BIN="/opt/flink/bin"
 NEXMARK_BIN="/opt/nexmark/bin"
 RUN_QUERY_CMD="${NEXMARK_BIN}/run_query.sh"
-FLINK_CONF_SUFFIX="${FLINK_CONF_SUFFIX:-v2-tracer}"
+FLINK_CONF_SUFFIX="${FLINK_CONF_SUFFIX:-v3-tracer}"
 FLINK_CONF_FILE=""
 APPLY_CONFIG_CMD="/opt/scripts/apply_flink_config.sh"
 SYNC_CLUSTER_CMD="/opt/scripts/sync_cluster.sh"
@@ -46,11 +46,11 @@ log_err() {
 
 usage() {
   cat <<'USAGE'
-Usage: run_query_runner_v2_savepoint_sweep.sh [--flink-conf-suffix SUFFIX] SAVEPOINT EXPERIMENT_NAME TM_MEMORY_SIZES...
+Usage: run_query_runner_v3_savepoint_sweep.sh [--flink-conf-suffix SUFFIX] SAVEPOINT EXPERIMENT_NAME TM_MEMORY_SIZES...
 
 Examples:
-  run_query_runner_v2_savepoint_sweep.sh --flink-conf-suffix v2-tracer savepoint-38aaf1-4aa879b3262f 8g-all-optimizations-4-slots 3g 3g 6g 8g
-  run_query_runner_v2_savepoint_sweep.sh -c v3 file:///mnt/home/haques24/flink-state/savepoints/savepoint-38aaf1-4aa879b3262f my-exp 8g 6g
+  run_query_runner_v3_savepoint_sweep.sh --flink-conf-suffix v3-tracer savepoint-38aaf1-4aa879b3262f 8g-all-optimizations-4-slots 3g 3g 6g 8g
+  run_query_runner_v3_savepoint_sweep.sh -c v3 file:///mnt/home/haques24/flink-state/savepoints/savepoint-38aaf1-4aa879b3262f my-exp 8g 6g
 USAGE
 }
 
@@ -92,7 +92,9 @@ update_flink_conf() {
       }
     }
   ' "$FLINK_CONF_FILE" > "$tmp_file"
-  mv "$tmp_file" "$FLINK_CONF_FILE"
+
+  cat "$tmp_file" > "$FLINK_CONF_FILE"
+  rm -f "$tmp_file"
 }
 
 apply_flink_conf() {
@@ -592,13 +594,15 @@ shift 2
 
 TM_MEMORY_SIZES=("$@")
 
+RUN_DATE_MMDDHH=$(date +%m%d%H)
+
 base_savepoint="${SAVEPOINT_INPUT##*/}"
 savepoint_tag="$base_savepoint"
 if [[ "$base_savepoint" =~ ^savepoint-([^-]+)- ]]; then
   savepoint_tag="savepoint-${BASH_REMATCH[1]}"
 fi
 
-EXPERIMENT_LABEL="${savepoint_tag}-${EXPERIMENT_NAME}"
+EXPERIMENT_LABEL="${RUN_DATE_MMDDHH}-${savepoint_tag}-${EXPERIMENT_NAME}"
 EXPERIMENT_ROOT="${DEST_ROOT}/${EXPERIMENT_LABEL}"
 
 mkdir -p "$EXPERIMENT_ROOT"
@@ -657,4 +661,4 @@ for tm_idx in "${!TM_MEMORY_SIZES[@]}"; do
   fi
 done
 
-log "QueryRunnerV2 savepoint sweep complete."
+log "QueryRunnerV3 savepoint sweep complete."
