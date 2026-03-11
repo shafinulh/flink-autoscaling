@@ -34,6 +34,10 @@ benchmark/managed-mem-sensitivity/test_fetch_async_profile
 benchmark/query-runner-3-savepoint/**/exp-*/
 benchmark/query-runner-v3-savepoint/savepoint-*/
 benchmark/query-runner-v2/*/
+benchmark/validate_nexmark_query_semantics/q20_plan/
+benchmark/validate_nexmark_query_semantics/q20_unique_plan/
+benchmark/validate_nexmark_query_semantics/compare_base_query_to_unique/
+benchmark/validate_nexmark_query_semantics/compare_unique_query_to_prefix/
 
 # lsm viewer generated data
 /rocksdb-flink-stats-viewer/__pycache__/
