@@ -1,0 +1,4 @@
+env.local.sh
+inputs/**/*.trace
+outputs/
+plots/

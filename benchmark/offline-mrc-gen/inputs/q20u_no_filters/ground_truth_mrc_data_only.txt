@@ -1,0 +1,284 @@
+===== run configuration =====
+trace=/Users/shafi/personal/block_cache_trace_analysis/traces/q20_unique_customjustinoptions_savepoint/trace.trace
+downsample_ratio=1
+mrc_only_block_types=data
+
+===== mrc =====
+cache_name,num_shard_bits,ghost_capacity,capacity,miss_ratio,total_accesses
+lru,0,0,4096,99.6509,14518543
+lru,0,0,8192,97.3535,14518543
+lru,0,0,16384,93.0253,14518543
+lru,0,0,32768,92.4055,14518543
+lru,0,0,65536,92.2422,14518543
+lru,0,0,131072,92.1565,14518543
+lru,0,0,262144,92.0689,14518543
+lru,0,0,524288,91.8919,14518543
+lru,0,0,1048576,91.5426,14518543
+lru,0,0,2097152,90.8577,14518543
+lru,0,0,4194304,84.0084,14518543
+lru,0,0,8388608,68.7350,14518543
+lru,0,0,16777216,59.4115,14518543
+lru,0,0,33554432,51.3558,14518543
+lru,0,0,67108864,42.6680,14518543
+lru,0,0,134217728,32.5695,14518543
+lru,0,0,268435456,26.6596,14518543
+lru,0,0,536870912,25.7434,14518543
+lru,0,0,1073741824,25.5371,14518543
+lru,0,0,2147483648,25.5242,14518543
+lru,0,0,4294967296,25.5242,14518543
+
+===== analyzer stdout/stderr =====
+Running for 0 seconds: Processed 100001 records (0 records/second). Trace duration 11 seconds. Observed miss ratio 55.22
+Running for 0 seconds: Processed 200000 records (0 records/second). Trace duration 20 seconds. Observed miss ratio 47.56
+Running for 0 seconds: Processed 300000 records (0 records/second). Trace duration 27 seconds. Observed miss ratio 41.91
+Running for 1 seconds: Processed 400000 records (400000 records/second). Trace duration 36 seconds. Observed miss ratio 39.20
+Running for 1 seconds: Processed 500000 records (500000 records/second). Trace duration 44 seconds. Observed miss ratio 37.32
+Running for 1 seconds: Processed 600001 records (600001 records/second). Trace duration 52 seconds. Observed miss ratio 35.99
+Running for 2 seconds: Processed 663309 records (331654 records/second). Trace duration 57 seconds. Observed miss ratio 35.41
+Running for 2 seconds: Processed 700001 records (350000 records/second). Trace duration 60 seconds. Observed miss ratio 35.08
+Running for 2 seconds: Processed 800000 records (400000 records/second). Trace duration 67 seconds. Observed miss ratio 33.19
+Running for 2 seconds: Processed 900000 records (450000 records/second). Trace duration 75 seconds. Observed miss ratio 30.14
+Running for 3 seconds: Processed 1000000 records (333333 records/second). Trace duration 82 seconds. Observed miss ratio 29.17
+Running for 3 seconds: Processed 1100000 records (366666 records/second). Trace duration 87 seconds. Observed miss ratio 28.92
+Running for 3 seconds: Processed 1200001 records (400000 records/second). Trace duration 91 seconds. Observed miss ratio 28.13
+Running for 4 seconds: Processed 1261866 records (315466 records/second). Trace duration 94 seconds. Observed miss ratio 27.59
+Running for 4 seconds: Processed 1300001 records (325000 records/second). Trace duration 95 seconds. Observed miss ratio 27.23
+Running for 4 seconds: Processed 1400000 records (350000 records/second). Trace duration 99 seconds. Observed miss ratio 26.30
+Running for 4 seconds: Processed 1500000 records (375000 records/second). Trace duration 103 seconds. Observed miss ratio 25.38
+Running for 4 seconds: Processed 1600000 records (400000 records/second). Trace duration 107 seconds. Observed miss ratio 24.51
+Running for 5 seconds: Processed 1700000 records (340000 records/second). Trace duration 114 seconds. Observed miss ratio 24.54
+Running for 5 seconds: Processed 1800001 records (360000 records/second). Trace duration 123 seconds. Observed miss ratio 25.68
+Running for 5 seconds: Processed 1900000 records (380000 records/second). Trace duration 132 seconds. Observed miss ratio 26.72
+Running for 6 seconds: Processed 1917677 records (319612 records/second). Trace duration 134 seconds. Observed miss ratio 26.91
+Running for 6 seconds: Processed 2000001 records (333333 records/second). Trace duration 142 seconds. Observed miss ratio 27.64
+Running for 6 seconds: Processed 2100000 records (350000 records/second). Trace duration 151 seconds. Observed miss ratio 28.01
+Running for 6 seconds: Processed 2200000 records (366666 records/second). Trace duration 160 seconds. Observed miss ratio 28.91
+Running for 7 seconds: Processed 2300000 records (328571 records/second). Trace duration 169 seconds. Observed miss ratio 29.60
+Running for 7 seconds: Processed 2400001 records (342857 records/second). Trace duration 178 seconds. Observed miss ratio 30.38
+Running for 7 seconds: Processed 2500000 records (357142 records/second). Trace duration 187 seconds. Observed miss ratio 31.11
+Running for 8 seconds: Processed 2557475 records (319684 records/second). Trace duration 192 seconds. Observed miss ratio 31.53
+Running for 8 seconds: Processed 2600001 records (325000 records/second). Trace duration 196 seconds. Observed miss ratio 31.76
+Running for 8 seconds: Processed 2700000 records (337500 records/second). Trace duration 202 seconds. Observed miss ratio 31.59
+Running for 8 seconds: Processed 2800000 records (350000 records/second). Trace duration 207 seconds. Observed miss ratio 30.86
+Running for 9 seconds: Processed 2900000 records (322222 records/second). Trace duration 211 seconds. Observed miss ratio 30.17
+Running for 9 seconds: Processed 3000000 records (333333 records/second). Trace duration 215 seconds. Observed miss ratio 29.61
+Running for 9 seconds: Processed 3100000 records (344444 records/second). Trace duration 219 seconds. Observed miss ratio 29.15
+Running for 9 seconds: Processed 3200001 records (355555 records/second). Trace duration 223 seconds. Observed miss ratio 28.62
+Running for 10 seconds: Processed 3215553 records (321555 records/second). Trace duration 224 seconds. Observed miss ratio 28.54
+Running for 10 seconds: Processed 3300000 records (330000 records/second). Trace duration 227 seconds. Observed miss ratio 28.09
+Running for 10 seconds: Processed 3400000 records (340000 records/second). Trace duration 231 seconds. Observed miss ratio 27.57
+Running for 11 seconds: Processed 3500000 records (318181 records/second). Trace duration 235 seconds. Observed miss ratio 27.07
+Running for 11 seconds: Processed 3600001 records (327272 records/second). Trace duration 239 seconds. Observed miss ratio 26.58
+Running for 11 seconds: Processed 3700000 records (336363 records/second). Trace duration 243 seconds. Observed miss ratio 26.11
+Running for 11 seconds: Processed 3800001 records (345454 records/second). Trace duration 247 seconds. Observed miss ratio 25.65
+Running for 12 seconds: Processed 3808720 records (317393 records/second). Trace duration 247 seconds. Observed miss ratio 25.61
+Running for 12 seconds: Processed 3900000 records (325000 records/second). Trace duration 255 seconds. Observed miss ratio 25.92
+Running for 12 seconds: Processed 4000000 records (333333 records/second). Trace duration 264 seconds. Observed miss ratio 26.44
+Running for 12 seconds: Processed 4100000 records (341666 records/second). Trace duration 273 seconds. Observed miss ratio 26.80
+Running for 13 seconds: Processed 4200001 records (323077 records/second). Trace duration 282 seconds. Observed miss ratio 27.22
+Running for 13 seconds: Processed 4300001 records (330769 records/second). Trace duration 292 seconds. Observed miss ratio 27.48
+Running for 13 seconds: Processed 4400000 records (338461 records/second). Trace duration 301 seconds. Observed miss ratio 27.76
+Running for 14 seconds: Processed 4419003 records (315643 records/second). Trace duration 303 seconds. Observed miss ratio 27.86
+Running for 14 seconds: Processed 4500000 records (321428 records/second). Trace duration 310 seconds. Observed miss ratio 28.23
+Running for 14 seconds: Processed 4600001 records (328571 records/second). Trace duration 319 seconds. Observed miss ratio 28.70
+Running for 14 seconds: Processed 4700000 records (335714 records/second). Trace duration 328 seconds. Observed miss ratio 29.15
+Running for 15 seconds: Processed 4800000 records (320000 records/second). Trace duration 337 seconds. Observed miss ratio 29.60
+Running for 15 seconds: Processed 4900001 records (326666 records/second). Trace duration 346 seconds. Observed miss ratio 29.98
+Running for 15 seconds: Processed 5000000 records (333333 records/second). Trace duration 355 seconds. Observed miss ratio 30.36
+Running for 16 seconds: Processed 5057942 records (316121 records/second). Trace duration 361 seconds. Observed miss ratio 30.60
+Running for 16 seconds: Processed 5100000 records (318750 records/second). Trace duration 365 seconds. Observed miss ratio 30.75
+Running for 16 seconds: Processed 5200000 records (325000 records/second). Trace duration 374 seconds. Observed miss ratio 31.12
+Running for 16 seconds: Processed 5300001 records (331250 records/second). Trace duration 383 seconds. Observed miss ratio 31.48
+Running for 17 seconds: Processed 5400000 records (317647 records/second). Trace duration 392 seconds. Observed miss ratio 31.81
+Running for 17 seconds: Processed 5500000 records (323529 records/second). Trace duration 400 seconds. Observed miss ratio 32.15
+Running for 17 seconds: Processed 5600001 records (329411 records/second). Trace duration 409 seconds. Observed miss ratio 32.49
+Running for 18 seconds: Processed 5691107 records (316172 records/second). Trace duration 418 seconds. Observed miss ratio 32.78
+Running for 18 seconds: Processed 5700001 records (316666 records/second). Trace duration 419 seconds. Observed miss ratio 32.81
+Running for 18 seconds: Processed 5800000 records (322222 records/second). Trace duration 428 seconds. Observed miss ratio 33.08
+Running for 18 seconds: Processed 5900000 records (327777 records/second). Trace duration 432 seconds. Observed miss ratio 32.72
+Running for 18 seconds: Processed 6000000 records (333333 records/second). Trace duration 436 seconds. Observed miss ratio 32.36
+Running for 19 seconds: Processed 6100001 records (321052 records/second). Trace duration 440 seconds. Observed miss ratio 32.00
+Running for 19 seconds: Processed 6200000 records (326315 records/second). Trace duration 444 seconds. Observed miss ratio 31.64
+Running for 19 seconds: Processed 6300001 records (331579 records/second). Trace duration 449 seconds. Observed miss ratio 31.29
+Running for 20 seconds: Processed 6336284 records (316814 records/second). Trace duration 452 seconds. Observed miss ratio 31.34
+Running for 20 seconds: Processed 6400001 records (320000 records/second). Trace duration 457 seconds. Observed miss ratio 31.46
+Running for 20 seconds: Processed 6500001 records (325000 records/second). Trace duration 467 seconds. Observed miss ratio 31.68
+Running for 20 seconds: Processed 6600001 records (330000 records/second). Trace duration 476 seconds. Observed miss ratio 31.82
+Running for 21 seconds: Processed 6700000 records (319047 records/second). Trace duration 485 seconds. Observed miss ratio 31.97
+Running for 21 seconds: Processed 6800000 records (323809 records/second). Trace duration 494 seconds. Observed miss ratio 32.13
+Running for 21 seconds: Processed 6900001 records (328571 records/second). Trace duration 503 seconds. Observed miss ratio 32.39
+Running for 22 seconds: Processed 6921361 records (314607 records/second). Trace duration 505 seconds. Observed miss ratio 32.45
+Running for 22 seconds: Processed 7000000 records (318181 records/second). Trace duration 513 seconds. Observed miss ratio 32.64
+Running for 22 seconds: Processed 7100001 records (322727 records/second). Trace duration 521 seconds. Observed miss ratio 32.88
+Running for 23 seconds: Processed 7200000 records (313043 records/second). Trace duration 530 seconds. Observed miss ratio 33.09
+Running for 23 seconds: Processed 7300000 records (317391 records/second). Trace duration 539 seconds. Observed miss ratio 33.32
+Running for 23 seconds: Processed 7400001 records (321739 records/second). Trace duration 548 seconds. Observed miss ratio 33.52
+Running for 24 seconds: Processed 7472187 records (311341 records/second). Trace duration 554 seconds. Observed miss ratio 33.68
+Running for 24 seconds: Processed 7500000 records (312500 records/second). Trace duration 556 seconds. Observed miss ratio 33.70
+Running for 24 seconds: Processed 7600000 records (316666 records/second). Trace duration 565 seconds. Observed miss ratio 33.90
+Running for 24 seconds: Processed 7700000 records (320833 records/second). Trace duration 574 seconds. Observed miss ratio 34.11
+Running for 25 seconds: Processed 7800000 records (312000 records/second). Trace duration 583 seconds. Observed miss ratio 34.31
+Running for 25 seconds: Processed 7900001 records (316000 records/second). Trace duration 592 seconds. Observed miss ratio 34.49
+Running for 25 seconds: Processed 8000000 records (320000 records/second). Trace duration 601 seconds. Observed miss ratio 34.69
+Running for 26 seconds: Processed 8050942 records (309651 records/second). Trace duration 606 seconds. Observed miss ratio 34.78
+Running for 26 seconds: Processed 8100000 records (311538 records/second). Trace duration 611 seconds. Observed miss ratio 34.89
+Running for 26 seconds: Processed 8200000 records (315384 records/second). Trace duration 621 seconds. Observed miss ratio 35.10
+Running for 26 seconds: Processed 8300001 records (319230 records/second). Trace duration 626 seconds. Observed miss ratio 34.95
+Running for 27 seconds: Processed 8400000 records (311111 records/second). Trace duration 630 seconds. Observed miss ratio 34.68
+Running for 27 seconds: Processed 8500001 records (314814 records/second). Trace duration 634 seconds. Observed miss ratio 34.41
+Running for 27 seconds: Processed 8600001 records (318518 records/second). Trace duration 638 seconds. Observed miss ratio 34.14
+Running for 28 seconds: Processed 8665350 records (309476 records/second). Trace duration 641 seconds. Observed miss ratio 33.96
+Running for 28 seconds: Processed 8700001 records (310714 records/second). Trace duration 642 seconds. Observed miss ratio 33.86
+Running for 28 seconds: Processed 8800001 records (314285 records/second). Trace duration 648 seconds. Observed miss ratio 33.70
+Running for 28 seconds: Processed 8900000 records (317857 records/second). Trace duration 658 seconds. Observed miss ratio 33.84
+Running for 29 seconds: Processed 9000000 records (310344 records/second). Trace duration 668 seconds. Observed miss ratio 33.97
+Running for 29 seconds: Processed 9100000 records (313793 records/second). Trace duration 678 seconds. Observed miss ratio 34.03
+Running for 29 seconds: Processed 9200000 records (317241 records/second). Trace duration 687 seconds. Observed miss ratio 34.13
+Running for 30 seconds: Processed 9258064 records (308602 records/second). Trace duration 693 seconds. Observed miss ratio 34.20
+Running for 30 seconds: Processed 9300001 records (310000 records/second). Trace duration 697 seconds. Observed miss ratio 34.28
+Running for 30 seconds: Processed 9400000 records (313333 records/second). Trace duration 706 seconds. Observed miss ratio 34.45
+Running for 31 seconds: Processed 9500000 records (306451 records/second). Trace duration 714 seconds. Observed miss ratio 34.48
+Running for 31 seconds: Processed 9600000 records (309677 records/second). Trace duration 721 seconds. Observed miss ratio 34.49
+Running for 31 seconds: Processed 9700000 records (312903 records/second). Trace duration 729 seconds. Observed miss ratio 34.46
+Running for 32 seconds: Processed 9735930 records (304247 records/second). Trace duration 732 seconds. Observed miss ratio 34.47
+Running for 32 seconds: Processed 9800000 records (306250 records/second). Trace duration 737 seconds. Observed miss ratio 34.45
+Running for 32 seconds: Processed 9900000 records (309375 records/second). Trace duration 745 seconds. Observed miss ratio 34.44
+Running for 33 seconds: Processed 10000000 records (303030 records/second). Trace duration 753 seconds. Observed miss ratio 34.44
+Running for 33 seconds: Processed 10100001 records (306060 records/second). Trace duration 761 seconds. Observed miss ratio 34.44
+Running for 33 seconds: Processed 10200000 records (309090 records/second). Trace duration 768 seconds. Observed miss ratio 34.44
+Running for 34 seconds: Processed 10219471 records (300572 records/second). Trace duration 770 seconds. Observed miss ratio 34.45
+Running for 34 seconds: Processed 10300001 records (302941 records/second). Trace duration 776 seconds. Observed miss ratio 34.45
+Running for 34 seconds: Processed 10400000 records (305882 records/second). Trace duration 784 seconds. Observed miss ratio 34.46
+Running for 35 seconds: Processed 10500000 records (300000 records/second). Trace duration 793 seconds. Observed miss ratio 34.46
+Running for 35 seconds: Processed 10600000 records (302857 records/second). Trace duration 800 seconds. Observed miss ratio 34.46
+Running for 36 seconds: Processed 10690506 records (296958 records/second). Trace duration 804 seconds. Observed miss ratio 34.25
+Running for 36 seconds: Processed 10700000 records (297222 records/second). Trace duration 805 seconds. Observed miss ratio 34.22
+Running for 36 seconds: Processed 10800000 records (300000 records/second). Trace duration 808 seconds. Observed miss ratio 33.92
+Running for 36 seconds: Processed 10900000 records (302777 records/second). Trace duration 812 seconds. Observed miss ratio 33.62
+Running for 37 seconds: Processed 11000001 records (297297 records/second). Trace duration 815 seconds. Observed miss ratio 33.34
+Running for 37 seconds: Processed 11100000 records (300000 records/second). Trace duration 819 seconds. Observed miss ratio 33.08
+Running for 37 seconds: Processed 11200000 records (302702 records/second). Trace duration 822 seconds. Observed miss ratio 32.82
+Running for 38 seconds: Processed 11203869 records (294838 records/second). Trace duration 822 seconds. Observed miss ratio 32.81
+Running for 38 seconds: Processed 11300001 records (297368 records/second). Trace duration 825 seconds. Observed miss ratio 32.56
+Running for 38 seconds: Processed 11400001 records (300000 records/second). Trace duration 829 seconds. Observed miss ratio 32.30
+Running for 39 seconds: Processed 11500000 records (294871 records/second). Trace duration 832 seconds. Observed miss ratio 32.04
+Running for 39 seconds: Processed 11600000 records (297435 records/second). Trace duration 835 seconds. Observed miss ratio 31.79
+Running for 39 seconds: Processed 11700001 records (300000 records/second). Trace duration 839 seconds. Observed miss ratio 31.54
+Running for 40 seconds: Processed 11717674 records (292941 records/second). Trace duration 839 seconds. Observed miss ratio 31.49
+Running for 40 seconds: Processed 11800000 records (295000 records/second). Trace duration 842 seconds. Observed miss ratio 31.29
+Running for 40 seconds: Processed 11900000 records (297500 records/second). Trace duration 847 seconds. Observed miss ratio 31.14
+Running for 41 seconds: Processed 12000000 records (292682 records/second). Trace duration 856 seconds. Observed miss ratio 31.16
+Running for 41 seconds: Processed 12100000 records (295121 records/second). Trace duration 864 seconds. Observed miss ratio 31.15
+Running for 41 seconds: Processed 12200000 records (297560 records/second). Trace duration 872 seconds. Observed miss ratio 31.15
+Running for 42 seconds: Processed 12226990 records (291118 records/second). Trace duration 875 seconds. Observed miss ratio 31.15
+Running for 42 seconds: Processed 12300001 records (292857 records/second). Trace duration 881 seconds. Observed miss ratio 31.13
+Running for 42 seconds: Processed 12400000 records (295238 records/second). Trace duration 889 seconds. Observed miss ratio 31.13
+Running for 43 seconds: Processed 12500000 records (290697 records/second). Trace duration 896 seconds. Observed miss ratio 31.14
+Running for 43 seconds: Processed 12600000 records (293023 records/second). Trace duration 904 seconds. Observed miss ratio 31.17
+Running for 43 seconds: Processed 12700000 records (295348 records/second). Trace duration 911 seconds. Observed miss ratio 31.18
+Running for 44 seconds: Processed 12726902 records (289247 records/second). Trace duration 913 seconds. Observed miss ratio 31.19
+Running for 44 seconds: Processed 12800000 records (290909 records/second). Trace duration 919 seconds. Observed miss ratio 31.20
+Running for 44 seconds: Processed 12900000 records (293181 records/second). Trace duration 926 seconds. Observed miss ratio 31.23
+Running for 45 seconds: Processed 13000000 records (288888 records/second). Trace duration 934 seconds. Observed miss ratio 31.25
+Running for 45 seconds: Processed 13100001 records (291111 records/second). Trace duration 942 seconds. Observed miss ratio 31.28
+Running for 45 seconds: Processed 13200001 records (293333 records/second). Trace duration 949 seconds. Observed miss ratio 31.30
+Running for 46 seconds: Processed 13209471 records (287162 records/second). Trace duration 950 seconds. Observed miss ratio 31.31
+Running for 46 seconds: Processed 13300000 records (289130 records/second). Trace duration 955 seconds. Observed miss ratio 31.20
+Running for 46 seconds: Processed 13400001 records (291304 records/second). Trace duration 958 seconds. Observed miss ratio 30.99
+Running for 47 seconds: Processed 13500001 records (287234 records/second). Trace duration 962 seconds. Observed miss ratio 30.77
+Running for 47 seconds: Processed 13600001 records (289361 records/second). Trace duration 965 seconds. Observed miss ratio 30.56
+Running for 47 seconds: Processed 13700000 records (291489 records/second). Trace duration 969 seconds. Observed miss ratio 30.36
+Running for 48 seconds: Processed 13716031 records (285750 records/second). Trace duration 969 seconds. Observed miss ratio 30.33
+Running for 48 seconds: Processed 13800001 records (287500 records/second). Trace duration 972 seconds. Observed miss ratio 30.16
+Running for 48 seconds: Processed 13900000 records (289583 records/second). Trace duration 976 seconds. Observed miss ratio 29.96
+Running for 49 seconds: Processed 14000001 records (285714 records/second). Trace duration 979 seconds. Observed miss ratio 29.77
+Running for 49 seconds: Processed 14100001 records (287755 records/second). Trace duration 982 seconds. Observed miss ratio 29.57
+Running for 49 seconds: Processed 14200000 records (289795 records/second). Trace duration 986 seconds. Observed miss ratio 29.38
+Running for 50 seconds: Processed 14231561 records (284631 records/second). Trace duration 987 seconds. Observed miss ratio 29.32
+Running for 50 seconds: Processed 14300000 records (286000 records/second). Trace duration 989 seconds. Observed miss ratio 29.20
+Running for 50 seconds: Processed 14400000 records (288000 records/second). Trace duration 993 seconds. Observed miss ratio 29.04
+Running for 51 seconds: Processed 14500000 records (284313 records/second). Trace duration 996 seconds. Observed miss ratio 28.87
+Running for 51 seconds: Processed 14600001 records (286274 records/second). Trace duration 1000 seconds. Observed miss ratio 28.71
+Running for 51 seconds: Processed 14700001 records (288235 records/second). Trace duration 1003 seconds. Observed miss ratio 28.53
+Running for 52 seconds: Processed 14748868 records (283632 records/second). Trace duration 1004 seconds. Observed miss ratio 28.45
+Running for 52 seconds: Processed 14800000 records (284615 records/second). Trace duration 1006 seconds. Observed miss ratio 28.36
+Running for 52 seconds: Processed 14900000 records (286538 records/second). Trace duration 1009 seconds. Observed miss ratio 28.19
+Running for 52 seconds: Processed 15000001 records (288461 records/second). Trace duration 1013 seconds. Observed miss ratio 28.05
+Running for 53 seconds: Processed 15100000 records (284905 records/second). Trace duration 1021 seconds. Observed miss ratio 28.08
+Running for 53 seconds: Processed 15200000 records (286792 records/second). Trace duration 1029 seconds. Observed miss ratio 28.12
+Running for 54 seconds: Processed 15254753 records (282495 records/second). Trace duration 1034 seconds. Observed miss ratio 28.12
+Running for 54 seconds: Processed 15300000 records (283333 records/second). Trace duration 1037 seconds. Observed miss ratio 28.14
+Running for 54 seconds: Processed 15400000 records (285185 records/second). Trace duration 1046 seconds. Observed miss ratio 28.15
+Running for 54 seconds: Processed 15500000 records (287037 records/second). Trace duration 1054 seconds. Observed miss ratio 28.17
+Running for 55 seconds: Processed 15600000 records (283636 records/second). Trace duration 1062 seconds. Observed miss ratio 28.18
+Running for 55 seconds: Processed 15700000 records (285454 records/second). Trace duration 1069 seconds. Observed miss ratio 28.23
+Running for 56 seconds: Processed 15763390 records (281489 records/second). Trace duration 1073 seconds. Observed miss ratio 28.25
+Running for 56 seconds: Processed 15800001 records (282142 records/second). Trace duration 1076 seconds. Observed miss ratio 28.27
+Running for 56 seconds: Processed 15900000 records (283928 records/second). Trace duration 1084 seconds. Observed miss ratio 28.31
+Running for 57 seconds: Processed 16000001 records (280701 records/second). Trace duration 1091 seconds. Observed miss ratio 28.35
+Running for 57 seconds: Processed 16100000 records (282456 records/second). Trace duration 1098 seconds. Observed miss ratio 28.38
+Running for 57 seconds: Processed 16200000 records (284210 records/second). Trace duration 1106 seconds. Observed miss ratio 28.43
+Running for 58 seconds: Processed 16234349 records (279902 records/second). Trace duration 1108 seconds. Observed miss ratio 28.44
+Running for 58 seconds: Processed 16300001 records (281034 records/second). Trace duration 1113 seconds. Observed miss ratio 28.47
+Running for 58 seconds: Processed 16400000 records (282758 records/second). Trace duration 1121 seconds. Observed miss ratio 28.51
+Running for 59 seconds: Processed 16500000 records (279661 records/second). Trace duration 1129 seconds. Observed miss ratio 28.55
+Running for 59 seconds: Processed 16600000 records (281355 records/second). Trace duration 1137 seconds. Observed miss ratio 28.58
+Running for 59 seconds: Processed 16700001 records (283050 records/second). Trace duration 1144 seconds. Observed miss ratio 28.62
+Running for 60 seconds: Processed 16723968 records (278732 records/second). Trace duration 1146 seconds. Observed miss ratio 28.63
+Running for 60 seconds: Processed 16800000 records (280000 records/second). Trace duration 1152 seconds. Observed miss ratio 28.66
+Running for 60 seconds: Processed 16900000 records (281666 records/second). Trace duration 1159 seconds. Observed miss ratio 28.71
+Running for 61 seconds: Processed 17000001 records (278688 records/second). Trace duration 1167 seconds. Observed miss ratio 28.74
+Running for 61 seconds: Processed 17100000 records (280327 records/second). Trace duration 1174 seconds. Observed miss ratio 28.76
+Running for 61 seconds: Processed 17200000 records (281967 records/second). Trace duration 1182 seconds. Observed miss ratio 28.80
+Running for 62 seconds: Processed 17224980 records (277822 records/second). Trace duration 1184 seconds. Observed miss ratio 28.81
+Running for 62 seconds: Processed 17300000 records (279032 records/second). Trace duration 1190 seconds. Observed miss ratio 28.83
+Running for 62 seconds: Processed 17400000 records (280645 records/second). Trace duration 1197 seconds. Observed miss ratio 28.86
+Running for 63 seconds: Processed 17500000 records (277777 records/second). Trace duration 1205 seconds. Observed miss ratio 28.89
+Running for 63 seconds: Processed 17600000 records (279365 records/second). Trace duration 1212 seconds. Observed miss ratio 28.93
+Running for 63 seconds: Processed 17700001 records (280952 records/second). Trace duration 1220 seconds. Observed miss ratio 28.96
+Running for 64 seconds: Processed 17729026 records (277016 records/second). Trace duration 1222 seconds. Observed miss ratio 28.96
+Running for 64 seconds: Processed 17800000 records (278125 records/second). Trace duration 1227 seconds. Observed miss ratio 28.99
+Running for 64 seconds: Processed 17900000 records (279687 records/second). Trace duration 1234 seconds. Observed miss ratio 29.02
+Running for 65 seconds: Processed 18000000 records (276923 records/second). Trace duration 1239 seconds. Observed miss ratio 28.96
+Running for 65 seconds: Processed 18100001 records (278461 records/second). Trace duration 1243 seconds. Observed miss ratio 28.83
+Running for 65 seconds: Processed 18200000 records (280000 records/second). Trace duration 1246 seconds. Observed miss ratio 28.70
+Running for 66 seconds: Processed 18223568 records (276114 records/second). Trace duration 1247 seconds. Observed miss ratio 28.67
+Running for 66 seconds: Processed 18300000 records (277272 records/second). Trace duration 1249 seconds. Observed miss ratio 28.56
+Running for 66 seconds: Processed 18400000 records (278787 records/second). Trace duration 1253 seconds. Observed miss ratio 28.43
+Running for 67 seconds: Processed 18500000 records (276119 records/second). Trace duration 1257 seconds. Observed miss ratio 28.31
+Running for 67 seconds: Processed 18600000 records (277611 records/second). Trace duration 1265 seconds. Observed miss ratio 28.33
+Running for 67 seconds: Processed 18700000 records (279104 records/second). Trace duration 1273 seconds. Observed miss ratio 28.35
+Running for 68 seconds: Processed 18726728 records (275393 records/second). Trace duration 1275 seconds. Observed miss ratio 28.35
+Running for 68 seconds: Processed 18800000 records (276470 records/second). Trace duration 1281 seconds. Observed miss ratio 28.37
+Running for 68 seconds: Processed 18900000 records (277941 records/second). Trace duration 1290 seconds. Observed miss ratio 28.37
+Running for 69 seconds: Processed 19000000 records (275362 records/second). Trace duration 1298 seconds. Observed miss ratio 28.39
+Running for 69 seconds: Processed 19100000 records (276811 records/second). Trace duration 1305 seconds. Observed miss ratio 28.41
+Running for 69 seconds: Processed 19200001 records (278260 records/second). Trace duration 1313 seconds. Observed miss ratio 28.44
+Running for 70 seconds: Processed 19236573 records (274808 records/second). Trace duration 1315 seconds. Observed miss ratio 28.45
+Running for 70 seconds: Processed 19300000 records (275714 records/second). Trace duration 1320 seconds. Observed miss ratio 28.47
+Running for 70 seconds: Processed 19400001 records (277142 records/second). Trace duration 1327 seconds. Observed miss ratio 28.47
+Running for 71 seconds: Processed 19500001 records (274647 records/second). Trace duration 1330 seconds. Observed miss ratio 28.33
+Running for 71 seconds: Processed 19600000 records (276056 records/second). Trace duration 1334 seconds. Observed miss ratio 28.20
+Running for 71 seconds: Processed 19700000 records (277464 records/second). Trace duration 1337 seconds. Observed miss ratio 28.08
+Running for 72 seconds: Processed 19741178 records (274183 records/second). Trace duration 1339 seconds. Observed miss ratio 28.02
+Running for 72 seconds: Processed 19800000 records (275000 records/second). Trace duration 1341 seconds. Observed miss ratio 27.95
+Running for 72 seconds: Processed 19900000 records (276388 records/second). Trace duration 1344 seconds. Observed miss ratio 27.82
+Running for 73 seconds: Processed 20000000 records (273972 records/second). Trace duration 1347 seconds. Observed miss ratio 27.70
+Running for 73 seconds: Processed 20100000 records (275342 records/second). Trace duration 1350 seconds. Observed miss ratio 27.57
+Running for 73 seconds: Processed 20200001 records (276712 records/second). Trace duration 1353 seconds. Observed miss ratio 27.45
+Running for 74 seconds: Processed 20227812 records (273348 records/second). Trace duration 1354 seconds. Observed miss ratio 27.42
+Running for 74 seconds: Processed 20300000 records (274324 records/second). Trace duration 1355 seconds. Observed miss ratio 27.33
+Running for 74 seconds: Processed 20400000 records (275675 records/second). Trace duration 1358 seconds. Observed miss ratio 27.21
+Running for 75 seconds: Processed 20500000 records (273333 records/second). Trace duration 1361 seconds. Observed miss ratio 27.09
+Running for 75 seconds: Processed 20600000 records (274666 records/second). Trace duration 1364 seconds. Observed miss ratio 26.98
+Running for 76 seconds: Processed 20692543 records (272270 records/second). Trace duration 1367 seconds. Observed miss ratio 26.87
+Running for 76 seconds: Processed 20700000 records (272368 records/second). Trace duration 1367 seconds. Observed miss ratio 26.86
+Running for 76 seconds: Processed 20800000 records (273684 records/second). Trace duration 1370 seconds. Observed miss ratio 26.76
+Running for 76 seconds: Processed 20900000 records (275000 records/second). Trace duration 1373 seconds. Observed miss ratio 26.64
+Running for 77 seconds: Processed 21000000 records (272727 records/second). Trace duration 1376 seconds. Observed miss ratio 26.51
+Running for 77 seconds: Processed 21100000 records (274025 records/second). Trace duration 1380 seconds. Observed miss ratio 26.38
+Running for 78 seconds: Processed 21154083 records (271206 records/second). Trace duration 1381 seconds. Observed miss ratio 26.31
+Running for 78 seconds: Processed 21200001 records (271794 records/second). Trace duration 1383 seconds. Observed miss ratio 26.26
+Running for 78 seconds: Processed 21203898 records (271844 records/second). Trace duration 1383 seconds. Observed miss ratio 26.25
+Status: Result incomplete: 
+Skipping the analysis statistics since the user wants to compute MRC only
