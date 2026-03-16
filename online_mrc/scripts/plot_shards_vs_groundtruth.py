@@ -46,15 +46,15 @@ def avg_block_size_from_csv(trace_csv: Path) -> float:
     numerically and are what SHARDS primarily samples; including large index/filter
     blocks inflates the average and shifts the SHARDS x-axis far to the right.
     Column layout: timestamp, block_id, block_type, block_size, ...
-    We sample up to 5M lines to keep it fast.
+    We sample up to 5M nonzero data-block entries to keep it fast.
     """
     total_size = 0
     count = 0
-    max_lines = 5_000_000
+    max_entries = 5_000_000
     BLOCK_TYPE_DATA = 9
     with open(trace_csv, "r") as f:
-        for i, line in enumerate(f):
-            if i >= max_lines:
+        for line in f:
+            if count >= max_entries:
                 break
             line = line.strip()
             if not line:
@@ -66,14 +66,17 @@ def avg_block_size_from_csv(trace_csv: Path) -> float:
                 block_type = int(parts[2])
                 if block_type != BLOCK_TYPE_DATA:
                     continue
-                total_size += int(parts[3])
+                block_size = int(parts[3])
+                if block_size <= 0:
+                    continue
+                total_size += block_size
                 count += 1
             except ValueError:
                 continue
     if count == 0:
-        raise ValueError("Could not read any data block entries from trace CSV")
+        raise ValueError("Could not read any nonzero data block entries from trace CSV")
     avg = total_size / count
-    print(f"  Average data block size: {avg:.1f} bytes  (sampled {count:,} data block entries)")
+    print(f"  Average data block size: {avg:.1f} bytes  (sampled {count:,} nonzero data block entries)")
     return avg
 
 
@@ -110,6 +113,7 @@ def main():
     parser.add_argument("--truth",      type=Path, required=True, help="Ground-truth CSV from block_cache_trace_analyzer")
     parser.add_argument("--trace-csv",  type=Path, required=True, help="Human-readable trace CSV (to compute avg block size)")
     parser.add_argument("--output",     type=Path, default=Path("q20-shards-vs-truth.png"), help="Output plot path")
+    parser.add_argument("--title",      type=str, default="q20: SHARDS vs Ground-Truth MRC", help="Plot title")
     args = parser.parse_args()
 
     print("Reading SHARDS MRC...")
@@ -133,7 +137,7 @@ def main():
     ax.set_xlabel("Cache capacity (bytes, log scale)")
     ax.set_ylabel("Miss rate")
     ax.set_ylim(0, 1.05)
-    ax.set_title("q20: SHARDS vs Ground-Truth MRC")
+    ax.set_title(args.title)
     ax.legend()
     ax.grid(True, which="both", linestyle="--", alpha=0.4)
 

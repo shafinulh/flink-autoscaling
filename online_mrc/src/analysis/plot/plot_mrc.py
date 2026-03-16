@@ -67,9 +67,10 @@ def plot_mrc(
     input_paths: list[Path],
     output_paths: list[Path],
     debug: bool,
+    title: str,
 ):
     plt.figure(figsize=(12, 8), dpi=300)
-    plt.title("Miss-Rate Curve")
+    plt.title(title)
     plt.xlabel("Number of key-value pairs")
     plt.ylabel("Miss-rate")
     plt.ylim(0, 1.01)
@@ -97,9 +98,14 @@ def main():
         help="output path(s)",
     )
     parser.add_argument("--debug", action="store_true")
+    parser.add_argument(
+        "--title",
+        default="Miss-Rate Curve",
+        help="plot title",
+    )
     args = parser.parse_args()
 
-    plot_mrc(args.oracle, args.input, args.output, args.debug)
+    plot_mrc(args.oracle, args.input, args.output, args.debug, args.title)
 
 
 if __name__ == "__main__":
