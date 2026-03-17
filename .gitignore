@@ -23,33 +23,12 @@ analysis/figures/
 *.log
 time,uptime,level*
 
-#incomplete experiments
-/benchmark/flink-optimization-final
-/benchmark/q20u-custom-mem-sensitivity
-
 # experiment outputs
-benchmark/mrc-gen/**/exp-*/
-benchmark/managed-mem-sensitivity/**/exp-*/
-benchmark/managed-mem-sensitivity/test_fetch_async_profile
-benchmark/query-runner-3-savepoint/**/exp-*/
-benchmark/query-runner-v3-savepoint/savepoint-*/
+benchmark/mrc-gen/*/
+benchmark/managed-mem-sensitivity/*/
+benchmark/query-runner-v3-savepoint/*/
 benchmark/query-runner-v2/*/
-benchmark/validate_nexmark_query_semantics/q20_plan/
-benchmark/validate_nexmark_query_semantics/q20_unique_plan/
-benchmark/validate_nexmark_query_semantics/compare_base_query_to_unique/
-benchmark/validate_nexmark_query_semantics/compare_unique_query_to_prefix/
-
-# lsm viewer generated data
-/rocksdb-flink-stats-viewer/__pycache__/
-/rocksdb-flink-stats-viewer/static/data/
-/rocksdb-flink-stats-viewer/static/data.json
-/rocksdb-flink-stats-viewer/static/index.json
-/rocksdb-flink-stats-viewer/
-/rocksdb-flink-stats-viewer-v2/__pycache__/
-/rocksdb-flink-stats-viewer-v2/static/data/
-/rocksdb-flink-stats-viewer-v2/static/data.json
-/rocksdb-flink-stats-viewer-v2/static/index.json
-/rocksdb-flink-stats-viewer-v2/
+benchmark/validate_nexmark_query_semantics/*/
 
 # tooling
 .DS_Store
