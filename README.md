@@ -24,10 +24,10 @@ Current focus:
 - `monitoring/`: Prometheus + Grafana stack for profiling
 
 ## Common workflows
-1) Build Nexmark Artifacts (base or custom):
+1) Build Nexmark Artifacts:
 ```
-./scripts/build_nexmark.sh base clean
-./scripts/build_nexmark.sh custom clean
+./scripts/build_nexmark.sh unique clean
+./scripts/build_nexmark.sh separate-unique clean
 ```
 
 2) Build custom rocksdb-options:
