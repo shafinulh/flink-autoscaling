@@ -59,7 +59,8 @@ state.backend.rocksdb.options-factory: com.example.DirectIORocksDBOptionsFactory
 # state.backend.rocksdb.bloom-filter.block-based-mode: false
 # execution.checkpointing.incremental: true
 # for example, hdfs://benchmark01/checkpoint
-state.checkpoints.dir: file:///data/flink-state/checkpoints
+state.checkpoints.dir: file:///mnt/experiments/nexmark-benchmark/flink-state/checkpoints
+execution.checkpointing.savepoint-dir: file:///mnt/experiments/nexmark-benchmark/flink-state/savepoints
 state.backend.rocksdb.localdir: /data/rocksdb
 #state.backend.incremental: true
 # execution.checkpointing.interval: 180000

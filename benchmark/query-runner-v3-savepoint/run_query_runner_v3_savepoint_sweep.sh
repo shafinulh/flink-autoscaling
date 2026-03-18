@@ -49,8 +49,8 @@ usage() {
 Usage: run_query_runner_v3_savepoint_sweep.sh [--flink-conf-suffix SUFFIX] SAVEPOINT EXPERIMENT_NAME TM_MEMORY_SIZES...
 
 Examples:
-  run_query_runner_v3_savepoint_sweep.sh --flink-conf-suffix v3-tracer savepoint-38aaf1-4aa879b3262f 8g-all-optimizations-4-slots 3g 3g 6g 8g
-  run_query_runner_v3_savepoint_sweep.sh -c v3 file:///mnt/home/haques24/flink-state/savepoints/savepoint-38aaf1-4aa879b3262f my-exp 8g 6g
+  run_query_runner_v3_savepoint_sweep.sh --flink-conf-suffix v2-tracer file:///mnt/experiments/nexmark-benchmark/flink-state/savepoints/savepoint-38aaf1-4aa879b3262f 8g-all-optimizations-4-slots 3g 3g 6g 8g
+  run_query_runner_v3_savepoint_sweep.sh -c v2 file:///mnt/experiments/nexmark-benchmark/flink-state/savepoints/savepoint-38aaf1-4aa879b3262f my-exp 8g 6g
 USAGE
 }
 
@@ -223,6 +223,19 @@ require_tools() {
       return 1
     fi
   done
+}
+
+require_explicit_state_path() {
+  local path_value=$1
+  local label=$2
+
+  if [[ "$path_value" == *"://"* || "$path_value" == /* ]]; then
+    return 0
+  fi
+
+  log_err "${label} must be a full URI or absolute path; got '${path_value}'."
+  log_err "Example: file:///mnt/experiments/nexmark-benchmark/flink-state/savepoints/savepoint-<id>"
+  exit 2
 }
 
 resolve_flink_conf_file() {
@@ -593,6 +606,8 @@ EXPERIMENT_NAME=$2
 shift 2
 
 TM_MEMORY_SIZES=("$@")
+
+require_explicit_state_path "$SAVEPOINT_INPUT" "SAVEPOINT"
 
 RUN_DATE_MMDDHH=$(date +%m%d%H)
 

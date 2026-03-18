@@ -51,7 +51,7 @@ Usage: run_query_runner_v2_sweep.sh [--flink-conf-suffix SUFFIX] EXPERIMENT_NAME
 
 Examples:
   run_query_runner_v2_sweep.sh --flink-conf-suffix v2 my-exp 3g 6g 8g
-  run_query_runner_v2_sweep.sh -c v3 my-exp 8g 6g
+  run_query_runner_v2_sweep.sh -c v2-tracer my-exp 8g 6g
 USAGE
 }
 
