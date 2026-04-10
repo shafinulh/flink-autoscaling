@@ -1,0 +1,578 @@
+package com.example;
+
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.GlobalConfiguration;
+import org.apache.flink.configuration.MemorySize;
+import org.apache.flink.contrib.streaming.state.RocksDBNativeMetricOptions;
+import org.apache.flink.contrib.streaming.state.RocksDBOptionsFactory;
+import org.apache.flink.runtime.clusterframework.TaskExecutorProcessSpec;
+import org.apache.flink.runtime.clusterframework.TaskExecutorProcessUtils;
+import org.rocksdb.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import sun.misc.Unsafe;
+
+import java.io.File;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.Collection;
+import java.util.OptionalLong;
+import java.util.Set;
+
+public class CustomRocksDBOptionsFactoryKubernetesJustin implements RocksDBOptionsFactory {
+
+    private static final Logger LOG =
+        LoggerFactory.getLogger(CustomRocksDBOptionsFactoryKubernetesJustin.class);
+
+    // TODO: add mode where no WBM is used? RocksDB will allocate memory independently per ColumnFamily?
+    private enum MemoryProvisioningMode {
+        FLINK_MANAGED,
+        FLINK_MANAGED_FINAL_EXPERIMENTS,
+        FLINK_MANAGED_INDEP,
+        MANUAL_INDEP,
+        MANUAL_CHARGED
+    }
+    // private static final MemoryProvisioningMode MEMORY_MODE = MemoryProvisioningMode.MANUAL_INDEP;
+    // private static final MemoryProvisioningMode MEMORY_MODE = MemoryProvisioningMode.FLINK_MANAGED;
+    private static final MemoryProvisioningMode MEMORY_MODE = MemoryProvisioningMode.FLINK_MANAGED_FINAL_EXPERIMENTS;
+
+    // ----------------------------
+    // Flink-managed memory inputs
+    // ----------------------------
+    private static final double WRITE_BUFFER_RATIO = 0.5;
+    private static final double HIGH_PRIORITY_POOL_RATIO = 0.1;
+    // numShardBits = -1 means it is automatically determined: every shard will be at least 512KB and number of shard bits will not exceed 6
+    private static final int DEFAULT_BLOCK_CACHE_SHARD_BITS = 6;
+
+    // For FINAL_EXPERIMENTS: keep write-path budget fixed and size only the block cache from the current slot.
+    private static final long FLINK_MANAGED_FINAL_WRITE_BUFFER_CAPACITY_BYTES = 92L * 1024 * 1024;
+
+    // fallback config values used when we cannot discover real TaskExecutor settings
+    private static final long FALLBACK_TOTAL_FLINK_MEMORY_BYTES = (long) (1.55 * 1024 * 1024 * 1024L);
+    private static final double FALLBACK_MANAGED_MEMORY_FRACTION = 0.4;
+    private static final int FALLBACK_TASK_SLOTS_PER_TM = 4;
+    private static final long FALLBACK_TOTAL_MANAGED_MEMORY_BYTES =
+        (long) (FALLBACK_TOTAL_FLINK_MEMORY_BYTES * FALLBACK_MANAGED_MEMORY_FRACTION);
+
+    // --------------------------
+    // Manual memory provisioning
+    // --------------------------
+    private static final long MANUAL_BLOCK_CACHE_CAPACITY_BYTES = 130L * 1024 * 1024;
+    private static final int MANUAL_BLOCK_CACHE_SHARD_BITS = 2;
+    private static final long MANUAL_WRITE_BUFFER_MANAGER_CAPACITY_BYTES = 53L * 1024 * 1024;
+
+    // --------------------------
+    // Default RocksDB settings
+    // --------------------------
+    // using Page Cache
+    // in default Flink direct reads/writes not used. in Justin it is
+    private static final boolean USE_DIRECT_READS = true;
+    private static final boolean USE_DIRECT_IO_FOR_FLUSH_AND_COMPACTION = true;
+
+    // write path and compaction settings
+    private static final long WRITE_BUFFER_SIZE = 64L * 1024 * 1024; // memtable
+    private static final int MAX_WRITE_BUFFER_NUMBER = 2; // num memtable before forcing flush
+    private static final int L0_FILE_NUM_COMPACTION_TRIGGER = 4;
+    private static final long TARGET_FILE_SIZE_BASE = 64L * 1024 * 1024; // L1 SST file size
+    private static final long MAX_BYTES_FOR_LEVEL_BASE = 256L * 1024 * 1024; // max L0 total bytes before
+
+    private static final boolean NEW_TABLE_READER_FOR_COMPACTION_INPUTS = false;
+    private static final long COMPACTION_READAHEAD_SIZE_BYTES = 0L;
+
+    // threads for compaction and background jobs
+    private static final int MAX_BACKGROUND_JOBS = 2;
+    private static final int MAX_SUBCOMPACTIONS = 1;
+
+    // read path block cache settings
+    private static final boolean CACHE_INDEX_AND_FILTER_BLOCKS = false;
+    private static final boolean CACHE_INDEX_AND_FILTER_BLOCKS_WITH_HIGH_PRIORITY = false;
+    private static final boolean PIN_L0_FILTER_AND_INDEX_BLOCKS = false;
+    private static final boolean PIN_TOP_LEVEL_INDEX_AND_FILTER = false;
+    private static final boolean USE_PARTITIONED_INDEX_FILTERS = false;
+
+    // stat dumps to see histogram types
+    private static final boolean ENABLE_STATS_DUMP = true;
+    private static final int STATS_DUMP_PERIOD_SEC = 300;
+    private static final String ROCKSDB_LOG_DIR = "/data/rocksdb_native_logs";
+    private static final int FIXED_PREFIX_BYTES = 22;
+    private static final int BLOOM_FILTER_BITS_PER_KEY = 10;
+
+    @Override
+    public DBOptions createDBOptions(DBOptions currentOptions, Collection<AutoCloseable> handlesToClose) {
+        MemoryLayout layout = resolveMemoryLayout();
+
+        Cache blockCache = new LRUCache(
+            layout.blockCacheCapacityBytes,
+            layout.blockCacheShardBits,
+            false,
+            HIGH_PRIORITY_POOL_RATIO
+        );
+        handlesToClose.add(new CacheHandle(blockCache, true));
+
+        Cache writeBufferChargeCache;
+        if (layout.chargeWriteBuffersToCache) {
+            writeBufferChargeCache = blockCache;
+        } else {
+            writeBufferChargeCache = new LRUCache(1);
+            handlesToClose.add(new CacheHandle(writeBufferChargeCache, false));
+        }
+
+        WriteBufferManager writeBufferManager = new WriteBufferManager(
+            layout.writeBufferManagerCapacityBytes,
+            writeBufferChargeCache
+        );
+        handlesToClose.add(writeBufferManager);
+
+        Statistics statistics = new Statistics();
+        statistics.setStatsLevel(StatsLevel.ALL);
+        handlesToClose.add(statistics);
+
+        configureDbLogDir(currentOptions);
+        enableStatsDump(currentOptions);
+        return currentOptions
+            .setWriteBufferManager(writeBufferManager)
+            .setUseDirectReads(USE_DIRECT_READS)
+            .setUseDirectIoForFlushAndCompaction(USE_DIRECT_IO_FOR_FLUSH_AND_COMPACTION)
+            .setNewTableReaderForCompactionInputs(NEW_TABLE_READER_FOR_COMPACTION_INPUTS)
+            .setCompactionReadaheadSize(COMPACTION_READAHEAD_SIZE_BYTES)
+            .setMaxBackgroundJobs(MAX_BACKGROUND_JOBS)
+            .setMaxSubcompactions(MAX_SUBCOMPACTIONS)
+            .setStatistics(statistics);
+    }
+
+    @Override
+    public RocksDBNativeMetricOptions createNativeMetricsOptions(RocksDBNativeMetricOptions nativeMetricOptions) {
+        try {
+            Field f = RocksDBNativeMetricOptions.class.getDeclaredField("monitorTickerTypes");
+            f.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            Set<TickerType> tickers = (Set<TickerType>) f.get(nativeMetricOptions);
+
+            tickers.add(TickerType.BLOCK_CACHE_ADD);
+            tickers.add(TickerType.BLOCK_CACHE_ADD_FAILURES);
+            tickers.add(TickerType.BLOCK_CACHE_INDEX_HIT);
+            tickers.add(TickerType.BLOCK_CACHE_INDEX_MISS);
+            tickers.add(TickerType.BLOCK_CACHE_FILTER_HIT);
+            tickers.add(TickerType.BLOCK_CACHE_FILTER_MISS);
+            tickers.add(TickerType.BLOCK_CACHE_DATA_HIT);
+            tickers.add(TickerType.BLOCK_CACHE_DATA_MISS);
+            tickers.add(TickerType.BLOCK_CACHE_BYTES_READ);
+            tickers.add(TickerType.BLOCK_CACHE_BYTES_WRITE);
+            tickers.add(TickerType.COMPACTION_KEY_DROP_OBSOLETE);
+            tickers.add(TickerType.COMPACTION_KEY_DROP_USER);
+            tickers.add(TickerType.MEMTABLE_HIT);
+            tickers.add(TickerType.MEMTABLE_MISS);
+            tickers.add(TickerType.NUMBER_KEYS_READ);
+            tickers.add(TickerType.NUMBER_KEYS_WRITTEN);
+
+            return nativeMetricOptions;
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            throw new RuntimeException("Failed to register block cache metrics", e);
+        }
+    }
+
+    @Override
+    public ColumnFamilyOptions createColumnOptions(
+            ColumnFamilyOptions currentOptions,
+            Collection<AutoCloseable> handlesToClose) {
+
+        Cache blockCache = handlesToClose.stream()
+            .filter(CacheHandle.class::isInstance)
+            .map(CacheHandle.class::cast)
+            .filter(CacheHandle::isPrimary)
+            .map(CacheHandle::cache)
+            .findFirst()
+            .orElseThrow(() -> new IllegalStateException("Block cache not found in handlesToClose"));
+
+        BlockBasedTableConfig tableConfig = resolveBlockBasedTableConfig(currentOptions);
+        tableConfig
+            .setCacheIndexAndFilterBlocks(CACHE_INDEX_AND_FILTER_BLOCKS)
+            .setCacheIndexAndFilterBlocksWithHighPriority(CACHE_INDEX_AND_FILTER_BLOCKS_WITH_HIGH_PRIORITY)
+            .setPinL0FilterAndIndexBlocksInCache(PIN_L0_FILTER_AND_INDEX_BLOCKS)
+            .setPinTopLevelIndexAndFilter(PIN_TOP_LEVEL_INDEX_AND_FILTER)
+            .setPartitionFilters(USE_PARTITIONED_INDEX_FILTERS)
+            .setWholeKeyFiltering(false)
+            .setBlockCache(blockCache);
+        applyBloomFilterIfConfigured(tableConfig, handlesToClose);
+
+        ColumnFamilyOptions configured = currentOptions
+            .setWriteBufferSize(WRITE_BUFFER_SIZE)
+            .setMaxWriteBufferNumber(MAX_WRITE_BUFFER_NUMBER)
+            .setTargetFileSizeBase(TARGET_FILE_SIZE_BASE)
+            .setLevel0FileNumCompactionTrigger(L0_FILE_NUM_COMPACTION_TRIGGER)
+            .setMaxBytesForLevelBase(MAX_BYTES_FOR_LEVEL_BASE)
+            .setTableFormatConfig(tableConfig);
+        applyFixedPrefixExtractorIfConfigured(configured);
+        return configured;
+    }
+
+    @Override
+    public ReadOptions createReadOptions(
+            ReadOptions currentOptions, Collection<AutoCloseable> handlesToClose) {
+        return currentOptions
+                .setPrefixSameAsStart(true)
+                .setTotalOrderSeek(false);
+    }
+
+    private static BlockBasedTableConfig resolveBlockBasedTableConfig(ColumnFamilyOptions currentOptions) {
+        TableFormatConfig config = currentOptions.tableFormatConfig();
+        if (config == null) {
+            return new BlockBasedTableConfig();
+        }
+        if (config instanceof BlockBasedTableConfig) {
+            return (BlockBasedTableConfig) config;
+        }
+        throw new IllegalStateException(
+            "CustomRocksDBOptionsFactoryKubernetesJustin requires BlockBasedTableConfig but found "
+                + config.getClass().getName());
+    }
+
+    private static MemoryLayout resolveMemoryLayout() {
+        switch (MEMORY_MODE) {
+            case FLINK_MANAGED:
+                return buildFlinkManagedLayout(true);
+            case FLINK_MANAGED_FINAL_EXPERIMENTS:
+                return buildFlinkManagedFinalExperimentsLayout(true);
+            case FLINK_MANAGED_INDEP:
+                return buildFlinkManagedLayout(false);
+            case MANUAL_INDEP:
+                return new MemoryLayout(
+                    MANUAL_BLOCK_CACHE_CAPACITY_BYTES,
+                    MANUAL_BLOCK_CACHE_SHARD_BITS,
+                    MANUAL_WRITE_BUFFER_MANAGER_CAPACITY_BYTES,
+                    false
+                );
+            case MANUAL_CHARGED:
+                return new MemoryLayout(
+                    MANUAL_BLOCK_CACHE_CAPACITY_BYTES,
+                    MANUAL_BLOCK_CACHE_SHARD_BITS,
+                    MANUAL_WRITE_BUFFER_MANAGER_CAPACITY_BYTES,
+                    true
+                );
+        }
+        throw new IllegalStateException();
+    }
+
+    private static MemoryLayout buildFlinkManagedLayout(boolean chargeWriteBuffersToCache) {
+        FlinkManagedMemoryStats stats = ManagedMemoryIntrospector.resolveFromConfig();
+        long perSlotManagedBytes = stats.perSlotManagedMemoryBytes();
+        long blockCacheCapacity = calculateFlinkBlockCacheCapacity(perSlotManagedBytes);
+        long writeBufferCapacity =
+            calculateFlinkWriteBufferManagerCapacity(perSlotManagedBytes);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug(
+                "Using Flink-managed memory from config: total={} bytes, slots={}, perSlot={} bytes, chargeWbm={}",
+                stats.totalManagedMemoryBytes,
+                stats.taskSlotsPerTm,
+                perSlotManagedBytes,
+                chargeWriteBuffersToCache);
+        }
+        return new MemoryLayout(
+            blockCacheCapacity,
+            DEFAULT_BLOCK_CACHE_SHARD_BITS,
+            writeBufferCapacity,
+            chargeWriteBuffersToCache
+        );
+    }
+
+    private static MemoryLayout buildFlinkManagedFinalExperimentsLayout(
+            boolean chargeWriteBuffersToCache) {
+        OptionalLong detected =
+            ManagedMemoryIntrospector.detectCurrentTaskManagedMemoryBytes();
+        long managedBytesForCurrentSlot;
+        if (detected.isPresent()) {
+            managedBytesForCurrentSlot = Math.max(detected.getAsLong(), 1L);
+            LOG.info(
+                "Using current task ResourceProfile managed memory for RocksDB sizing: managedMemory={} bytes, fixedWbm={} bytes, chargeWbm={}",
+                managedBytesForCurrentSlot,
+                FLINK_MANAGED_FINAL_WRITE_BUFFER_CAPACITY_BYTES,
+                chargeWriteBuffersToCache);
+        } else {
+            FlinkManagedMemoryStats stats = ManagedMemoryIntrospector.resolveFromConfig();
+            managedBytesForCurrentSlot = stats.perSlotManagedMemoryBytes();
+            LOG.warn(
+                "Current task managed memory was unavailable; falling back to config-derived per-slot managed memory: total={} bytes, slots={}, perSlot={} bytes, fixedWbm={} bytes, chargeWbm={}",
+                stats.totalManagedMemoryBytes,
+                stats.taskSlotsPerTm,
+                managedBytesForCurrentSlot,
+                FLINK_MANAGED_FINAL_WRITE_BUFFER_CAPACITY_BYTES,
+                chargeWriteBuffersToCache);
+        }
+
+        long blockCacheCapacity = calculateFlinkBlockCacheCapacity(managedBytesForCurrentSlot);
+        return new MemoryLayout(
+            blockCacheCapacity,
+            DEFAULT_BLOCK_CACHE_SHARD_BITS,
+            FLINK_MANAGED_FINAL_WRITE_BUFFER_CAPACITY_BYTES,
+            chargeWriteBuffersToCache
+        );
+    }
+
+    private static void enableStatsDump(DBOptions options) {
+        if (!ENABLE_STATS_DUMP) {
+            return;
+        }
+        options.setStatsDumpPeriodSec(STATS_DUMP_PERIOD_SEC);
+    }
+
+    private static void configureDbLogDir(DBOptions options) {
+        File dir = new File(ROCKSDB_LOG_DIR);
+        if (!dir.exists() && !dir.mkdirs()) {
+            return;
+        }
+        options.setDbLogDir(ROCKSDB_LOG_DIR);
+    }
+
+    private static long calculateFlinkBlockCacheCapacity(long perSlotManagedBytes) {
+        long sanitized = Math.max(perSlotManagedBytes, 1L);
+        return (long) (((3 - WRITE_BUFFER_RATIO) * sanitized) / 3);
+    }
+
+    private static long calculateFlinkWriteBufferManagerCapacity(long perSlotManagedBytes) {
+        long sanitized = Math.max(perSlotManagedBytes, 1L);
+        return (long) ((2 * sanitized * WRITE_BUFFER_RATIO) / 3);
+    }
+
+    private static void applyFixedPrefixExtractorIfConfigured(ColumnFamilyOptions options) {
+        if (FIXED_PREFIX_BYTES <= 0) {
+            return;
+        }
+        LOG.info("Enabling fixed-length prefix extractor ({} bytes) for q9_unique state CFs.", FIXED_PREFIX_BYTES);
+        options.useFixedLengthPrefixExtractor(FIXED_PREFIX_BYTES);
+        options.setOptimizeFiltersForHits(true);
+    }
+
+    private static void applyBloomFilterIfConfigured(
+            BlockBasedTableConfig tableConfig,
+            Collection<AutoCloseable> handlesToClose) {
+        if (BLOOM_FILTER_BITS_PER_KEY <= 0) {
+            return;
+        }
+        BloomFilter bloomFilter = new BloomFilter(BLOOM_FILTER_BITS_PER_KEY, false);
+        handlesToClose.add(bloomFilter);
+        tableConfig.setFilterPolicy(bloomFilter);
+    }
+
+    private static final class FlinkManagedMemoryStats {
+        private final long totalManagedMemoryBytes;
+        private final int taskSlotsPerTm;
+
+        private FlinkManagedMemoryStats(long totalManagedMemoryBytes, int taskSlotsPerTm) {
+            this.totalManagedMemoryBytes = totalManagedMemoryBytes;
+            this.taskSlotsPerTm = Math.max(taskSlotsPerTm, 1);
+        }
+
+        private long perSlotManagedMemoryBytes() {
+            return Math.max(totalManagedMemoryBytes / taskSlotsPerTm, 1L);
+        }
+    }
+
+    private static final class ManagedMemoryIntrospector {
+        private static final Object LOCK = new Object();
+        private static volatile FlinkManagedMemoryStats cachedStats;
+
+        private static FlinkManagedMemoryStats resolveFromConfig() {
+            FlinkManagedMemoryStats stats = cachedStats;
+            if (stats != null) {
+                return stats;
+            }
+            synchronized (LOCK) {
+                stats = cachedStats;
+                if (stats != null) {
+                    return stats;
+                }
+                cachedStats = detectFromConfig();
+                return cachedStats;
+            }
+        }
+
+        private static FlinkManagedMemoryStats detectFromConfig() {
+            try {
+                Configuration configuration = loadFlinkConfiguration();
+                TaskExecutorProcessSpec spec =
+                    TaskExecutorProcessUtils.processSpecFromConfig(configuration);
+                long totalManaged = spec.getManagedMemorySize().getBytes();
+                int slots = spec.getNumSlots();
+                if (totalManaged <= 0 || slots <= 0) {
+                    LOG.warn(
+                        "Invalid managed memory detection (total={}, slots={}), falling back to defaults.",
+                        totalManaged,
+                        slots);
+                    return fallbackStats();
+                }
+                LOG.info(
+                    "Detected managed memory from Flink configuration: total={} bytes, slots={}",
+                    totalManaged,
+                    slots);
+                return new FlinkManagedMemoryStats(totalManaged, slots);
+            } catch (Throwable t) {
+                LOG.warn(
+                    "Unable to determine Flink managed memory from configuration, falling back to defaults.",
+                    t);
+                return fallbackStats();
+            }
+        }
+
+        private static Configuration loadFlinkConfiguration() {
+            String confDir = System.getenv("FLINK_CONF_DIR");
+            if (confDir != null && !confDir.isEmpty()) {
+                return GlobalConfiguration.loadConfiguration(confDir);
+            }
+            return GlobalConfiguration.loadConfiguration();
+        }
+
+        private static FlinkManagedMemoryStats fallbackStats() {
+            return new FlinkManagedMemoryStats(
+                FALLBACK_TOTAL_MANAGED_MEMORY_BYTES, FALLBACK_TASK_SLOTS_PER_TM);
+        }
+
+        private static OptionalLong detectCurrentTaskManagedMemoryBytes() {
+            try {
+                Object task = detectCurrentTask();
+                if (task == null) {
+                    return OptionalLong.empty();
+                }
+
+                Object memoryManager = readField(task, "memoryManager");
+                if (memoryManager == null) {
+                    return OptionalLong.empty();
+                }
+
+                Method getMemorySize = memoryManager.getClass().getMethod("getMemorySize");
+                Object sizeValue = getMemorySize.invoke(memoryManager);
+                if (!(sizeValue instanceof Number)) {
+                    return OptionalLong.empty();
+                }
+
+                long bytes = ((Number) sizeValue).longValue();
+                if (bytes > 0) {
+                    LOG.info(
+                        "Detected current slot managed memory from task MemoryManager: {} bytes",
+                        bytes);
+                    return OptionalLong.of(bytes);
+                }
+            } catch (Throwable t) {
+                LOG.debug("Unable to determine managed memory from current task.", t);
+            }
+            return OptionalLong.empty();
+        }
+
+        private static Object detectCurrentTask() {
+            Object target = UnsafeHolder.currentThreadTarget();
+            if (target == null) {
+                return null;
+            }
+
+            Class<?> clazz = target.getClass();
+            while (clazz != null) {
+                if ("org.apache.flink.runtime.taskmanager.Task".equals(clazz.getName())) {
+                    return target;
+                }
+                clazz = clazz.getSuperclass();
+            }
+
+            LOG.debug(
+                "Current thread target was not a Flink Task: {}",
+                target.getClass().getName());
+            return null;
+        }
+
+        private static Object readField(Object instance, String fieldName) throws Exception {
+            Field field = findField(instance.getClass(), fieldName);
+            if (field == null) {
+                return null;
+            }
+            field.setAccessible(true);
+            return field.get(instance);
+        }
+
+        private static Field findField(Class<?> type, String fieldName) {
+            Class<?> current = type;
+            while (current != null) {
+                try {
+                    return current.getDeclaredField(fieldName);
+                } catch (NoSuchFieldException ignored) {
+                    current = current.getSuperclass();
+                }
+            }
+            return null;
+        }
+    }
+
+    private static final class UnsafeHolder {
+        private static final Unsafe UNSAFE = initUnsafe();
+        private static final long THREAD_TARGET_OFFSET = initThreadTargetOffset();
+
+        private static Object currentThreadTarget() {
+            if (UNSAFE == null || THREAD_TARGET_OFFSET < 0L) {
+                return null;
+            }
+            return UNSAFE.getObject(Thread.currentThread(), THREAD_TARGET_OFFSET);
+        }
+
+        private static Unsafe initUnsafe() {
+            try {
+                Field field = Unsafe.class.getDeclaredField("theUnsafe");
+                field.setAccessible(true);
+                return (Unsafe) field.get(null);
+            } catch (Throwable t) {
+                LOG.debug("Unable to initialize sun.misc.Unsafe.", t);
+                return null;
+            }
+        }
+
+        private static long initThreadTargetOffset() {
+            if (UNSAFE == null) {
+                return -1L;
+            }
+            try {
+                Field targetField = Thread.class.getDeclaredField("target");
+                return UNSAFE.objectFieldOffset(targetField);
+            } catch (Throwable t) {
+                LOG.debug("Unable to resolve Thread.target offset.", t);
+                return -1L;
+            }
+        }
+    }
+
+    private static final class MemoryLayout {
+        private final long blockCacheCapacityBytes;
+        private final int blockCacheShardBits;
+        private final long writeBufferManagerCapacityBytes;
+        private final boolean chargeWriteBuffersToCache;
+
+        private MemoryLayout(
+                long blockCacheCapacityBytes,
+                int blockCacheShardBits,
+                long writeBufferManagerCapacityBytes,
+                boolean chargeWriteBuffersToCache) {
+            this.blockCacheCapacityBytes = blockCacheCapacityBytes;
+            this.blockCacheShardBits = blockCacheShardBits;
+            this.writeBufferManagerCapacityBytes = writeBufferManagerCapacityBytes;
+            this.chargeWriteBuffersToCache = chargeWriteBuffersToCache;
+        }
+    }
+
+    private static final class CacheHandle implements AutoCloseable {
+        private final Cache cache;
+        private final boolean primary;
+
+        private CacheHandle(Cache cache, boolean primary) {
+            this.cache = cache;
+            this.primary = primary;
+        }
+
+        private Cache cache() {
+            return cache;
+        }
+
+        private boolean isPrimary() {
+            return primary;
+        }
+
+        @Override
+        public void close() {
+            cache.close();
+        }
+    }
+}

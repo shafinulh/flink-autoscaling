@@ -15,4 +15,6 @@ log "Building rocksdb-options in ${ROCKSDB_OPTIONS_HOME}"
 jar_path="${ROCKSDB_OPTIONS_HOME}/target/rocksdb-options-1.0-SNAPSHOT.jar"
 log "Copying jar into Flink + Justin"
 maybe_sudo cp "$jar_path" "${FLINK_HOME}/lib/"
-maybe_sudo cp "$jar_path" "${JUSTIN_FLINK_HOME}/"
+if [[ -n "${JUSTIN_FLINK_HOME:-}" && -d "${JUSTIN_FLINK_HOME}" ]]; then
+  maybe_sudo cp "$jar_path" "${JUSTIN_FLINK_HOME}/"
+fi
