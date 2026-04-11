@@ -1,0 +1,44 @@
+===== configuration =====
+run_id=test-trace
+trace=/home/haques24/flink-autoscaling/benchmark/online-mrc/results/test-trace/trace.bin
+total_accesses=19102931
+filtered_accesses=18549477
+filter=data_blocks_only(type=9),user_callers_only(Get=1,MultiGet=2,Iterator=3)
+downsample_ratio=1 (ground truth — no sampling)
+
+===== miss ratio curve =====
+# cache_size_bytes,miss_ratio
+cache_name,num_shard_bits,ghost_capacity,capacity,miss_ratio,total_accesses
+lru,0,0,4096,100.0000,18549477
+lru,0,0,8192,99.9998,18549477
+lru,0,0,16384,99.9979,18549477
+lru,0,0,32768,99.9928,18549477
+lru,0,0,65536,99.9827,18549477
+lru,0,0,131072,99.9641,18549477
+lru,0,0,262144,99.9260,18549477
+lru,0,0,524288,99.8482,18549477
+lru,0,0,1048576,99.6926,18549477
+lru,0,0,2097152,99.3838,18549477
+lru,0,0,4194304,98.7694,18549477
+lru,0,0,8388608,97.5473,18549477
+lru,0,0,16777216,95.1377,18549477
+lru,0,0,33554432,90.4662,18549477
+lru,0,0,67108864,81.7941,18549477
+lru,0,0,134217728,67.1525,18549477
+lru,0,0,268435456,48.3239,18549477
+lru,0,0,536870912,33.5590,18549477
+lru,0,0,1073741824,18.6674,18549477
+lru,0,0,2147483648,5.2203,18549477
+lru,0,0,4294967296,4.6053,18549477
+
+===== analyzer log =====
+Running for 1 seconds: Processed 320841 records/second. Trace duration 2 seconds. Observed miss ratio 70.32
+Running for 11 seconds: Processed 277193 records/second. Trace duration 14 seconds. Observed miss ratio 79.63
+Running for 21 seconds: Processed 271306 records/second. Trace duration 25 seconds. Observed miss ratio 72.16
+Running for 31 seconds: Processed 269366 records/second. Trace duration 35 seconds. Observed miss ratio 68.25
+Running for 41 seconds: Processed 268839 records/second. Trace duration 44 seconds. Observed miss ratio 66.48
+Running for 51 seconds: Processed 268172 records/second. Trace duration 54 seconds. Observed miss ratio 65.56
+Running for 61 seconds: Processed 266983 records/second. Trace duration 65 seconds. Observed miss ratio 67.01
+Running for 69 seconds: Processed 268833 records/second. Trace duration 75 seconds. Observed miss ratio 67.17
+Status: Result incomplete: No more records to read.
+Skipping timeline analysis since --mrc_only=true.

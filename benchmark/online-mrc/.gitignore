@@ -1,0 +1,15 @@
+env.local.sh
+
+# The root .gitignore has *.log — un-ignore bench.log here.
+!results/*/bench.log
+
+# Large / regenerable artifacts within results/ — ignore by pattern.
+# Small result files (bench.log, analysis/mrc.txt) are tracked.
+results/*/db/
+results/*/trace.bin
+results/*/rocksdb.LOG
+results/*.out
+results/*/analysis/run.log
+results/*/analysis/human.csv
+results/*/analysis/filtered.csv
+results/*/analysis/cache_config.txt
