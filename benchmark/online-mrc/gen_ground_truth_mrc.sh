@@ -115,12 +115,12 @@ log "  Kept: $FILTERED_LINES / $TOTAL_LINES accesses ($(( FILTERED_LINES * 100 /
 
 # ---------------------------------------------------------------------------
 # Step 3: run analyzer on filtered trace → MRC
-# Cache sizes span a practical range (4KB … 4GB) to produce a full MRC curve.
+# Cache sizes span a practical range (4KB … 32MB) to produce a full MRC curve.
 # ---------------------------------------------------------------------------
 log "Step 3/3: computing ground-truth MRC..."
 
 cat > "$CACHE_CFG" <<'EOF'
-lru,0,0,4K,8K,16K,32K,64K,128K,256K,512K,1M,2M,4M,8M,16M,32M,64M,128M,256M,512M,1G,2G,4G
+lru,0,0,4K,8K,16K,32K,64K,128K,256K,512K,1M,2M,4M,8M,16M,32M
 EOF
 
 "$TRACE_ANALYZER" \
