@@ -2,18 +2,23 @@
 exp2_animation.py — Experiment 2 SHARDS MRC convergence animation.
 
 Generates a single HTML file with 4 side-by-side panels (one per sampling rate),
-all driven by shared playback controls. Each panel shows the SHARDS MRC evolving
-snapshot-by-snapshot toward the ground truth, with live MAE.
+all driven by shared playback controls. Each panel shows:
+  - SHARDS snapshot (blue)         : online approximation at each checkpoint
+  - GT snapshot (orange dashed)    : exact LRU MRC using same # of accesses
+  - Final GT reference (orange dots): full ground truth over all accesses
+
+At s=1.0, the SHARDS and GT snapshot lines should track each other frame-by-frame.
 
 Usage:
   python3 exp2_animation.py \\
-    --results-dir /path/to/benchmark/online-mrc/results \\
-    --truth-run   exp2_trace \\
-    --shards-runs exp2_shards_s1 exp2_shards_s01 exp2_shards_s001 exp2_shards_s0001 \\
-    --labels "s=1.0" "s=0.1" "s=0.01" "s=0.001" \\
-    --filtered-csv /tom/distr_project/exp2_trace/analysis/filtered.csv \\
-    --interval 1000000 \\
-    --output-dir /path/to/output
+    --results-dir      benchmark/online-mrc/results \\
+    --truth-run        exp2_trace \\
+    --shards-runs      exp2_shards_s1 exp2_shards_s01 exp2_shards_s001 exp2_shards_s0001 \\
+    --labels           "s=1.0" "s=0.1" "s=0.01" "s=0.001" \\
+    --filtered-csv     /tom/distr_project/exp2_trace/analysis/filtered.csv \\
+    --gt-snapshots-dir benchmark/online-mrc/results/exp2_trace/analysis/gt_snapshots \\
+    --interval         1000000 \\
+    --output-dir       benchmark/online-mrc/results/exp2_analysis
 """
 
 import argparse
@@ -50,7 +55,7 @@ def read_shards_txt(path: Path, avg_bs: float):
 
 
 def read_ground_truth(path: Path):
-    """Read ground truth mrc.txt. Returns (bytes_list, miss_ratio_0to1_list)."""
+    """Read mrc.txt or gt_snapshot_N.txt. Returns (bytes_list, miss_ratio_0to1_list)."""
     caps, mrs = [], []
     in_mrc = False
     with open(path) as f:
@@ -77,7 +82,6 @@ def read_ground_truth(path: Path):
 
 
 def avg_block_size_from_csv(path: Path, max_entries: int = 2_000_000) -> float:
-    """Avg block size from filtered.csv (already type=9 only). Col 3 = block_size."""
     total, count = 0, 0
     with open(path) as f:
         for line in f:
@@ -104,10 +108,7 @@ def avg_block_size_from_csv(path: Path, max_entries: int = 2_000_000) -> float:
 
 
 def collect_snapshots(run_dir: Path, avg_bs: float):
-    """
-    Collect all online_mrc.bin.N.txt snapshot files, sorted by N.
-    Returns list of (snap_num, xs, ys).
-    """
+    """Collect SHARDS snapshot .txt files. Returns [(snap_num, xs, ys), ...]."""
     snaps = []
     for p in run_dir.iterdir():
         name = p.name
@@ -123,15 +124,31 @@ def collect_snapshots(run_dir: Path, avg_bs: float):
     return snaps
 
 
+def collect_gt_snapshots(gt_dir: Path):
+    """Collect GT snapshot files. Returns [(snap_num, xs, ys), ...]."""
+    snaps = []
+    for p in gt_dir.iterdir():
+        name = p.name
+        if name.startswith('gt_snapshot_') and name.endswith('.txt'):
+            stem = name[len('gt_snapshot_'):-len('.txt')]
+            try:
+                n = int(stem)
+            except ValueError:
+                continue
+            xs, ys = read_ground_truth(p)
+            snaps.append((n, xs, ys))
+    snaps.sort(key=lambda s: s[0])
+    return snaps
+
+
 # ---------------------------------------------------------------------------
 # Panel drawing helpers
 # ---------------------------------------------------------------------------
 
-# Per-panel SVG dimensions
-PW, PH = 400, 400
-PP_L, PP_R, PP_T, PP_B = 65, 15, 50, 60
+PW, PH = 400, 420
+PP_L, PP_R, PP_T, PP_B = 65, 15, 50, 75
 pw = PW - PP_L - PP_R   # 320
-ph = PH - PP_T - PP_B   # 290
+ph = PH - PP_T - PP_B   # 295
 
 
 def _px(b, log_min, log_max):
@@ -166,13 +183,11 @@ def _interpolate(xs, ys, target):
     return None
 
 
-def _panel_svg(panel_idx, truth_xs, truth_ys, log_min, log_max, label):
-    """Return SVG markup for one panel's static elements (axes, grid, ground truth, legend)."""
+def _panel_svg(panel_idx, truth_xs, truth_ys, log_min, log_max, label, has_gt_snaps):
+    """Return SVG markup for one panel's static elements."""
     L = []
 
     L.append(f'<rect width="{PW}" height="{PH}" fill="white"/>')
-
-    # Panel title (sampling rate label)
     L.append(
         f'<text x="{PW//2}" y="28" text-anchor="middle" '
         f'font-size="13" font-weight="bold" font-family="monospace">{label}</text>'
@@ -182,19 +197,21 @@ def _panel_svg(panel_idx, truth_xs, truth_ys, log_min, log_max, label):
         f'fill="none" stroke="#aaa" stroke-width="1"/>'
     )
 
-    # X grid + labels (powers of 10)
+    # X grid + labels
     for p in range(int(math.ceil(log_min)), int(math.floor(log_max)) + 1):
         xg = _px(10**p, log_min, log_max)
-        L.append(f'<line x1="{xg:.1f}" y1="{PP_T}" x2="{xg:.1f}" y2="{PP_T+ph}" stroke="#eee" stroke-dasharray="3 3"/>')
+        L.append(f'<line x1="{xg:.1f}" y1="{PP_T}" x2="{xg:.1f}" y2="{PP_T+ph}" '
+                 f'stroke="#eee" stroke-dasharray="3 3"/>')
         L.append(
             f'<text x="{xg:.1f}" y="{PP_T+ph+15}" text-anchor="middle" '
             f'font-size="9" fill="#666" font-family="monospace">{_fmt_bytes(10**p)}</text>'
         )
 
-    # Y grid + labels (only on leftmost panel)
+    # Y grid + labels (leftmost panel only)
     for tick in [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]:
         yg = _py(tick)
-        L.append(f'<line x1="{PP_L}" y1="{yg:.1f}" x2="{PP_L+pw}" y2="{yg:.1f}" stroke="#eee" stroke-dasharray="3 3"/>')
+        L.append(f'<line x1="{PP_L}" y1="{yg:.1f}" x2="{PP_L+pw}" y2="{yg:.1f}" '
+                 f'stroke="#eee" stroke-dasharray="3 3"/>')
         if panel_idx == 0:
             L.append(
                 f'<text x="{PP_L-5}" y="{yg+4:.1f}" text-anchor="end" '
@@ -213,46 +230,54 @@ def _panel_svg(panel_idx, truth_xs, truth_ys, log_min, log_max, label):
             f'font-family="monospace" transform="rotate(-90,{cx},{cy})">Miss ratio</text>'
         )
 
-    # Ground truth line + dots
+    # Final ground truth dots (reference — always visible)
     valid = [(b, m) for b, m in zip(truth_xs, truth_ys) if b > 0]
-    if len(valid) >= 2:
-        pts = " ".join(f"{_px(b,log_min,log_max):.1f},{_py(m):.1f}" for b, m in valid)
-        L.append(f'<polyline points="{pts}" fill="none" stroke="#f90" stroke-width="2" stroke-linejoin="round"/>')
     for b, m in valid:
         L.append(
             f'<circle cx="{_px(b,log_min,log_max):.1f}" cy="{_py(m):.1f}" '
             f'r="3" fill="#f90" stroke="white" stroke-width="1"/>'
         )
 
-    # Legend (inside panel, top-right)
-    lx = PP_L + pw - 160
-    ly = PP_T + 12
-    L.append(f'<line x1="{lx}" y1="{ly}" x2="{lx+20}" y2="{ly}" stroke="steelblue" stroke-width="2"/>')
-    L.append(f'<text x="{lx+24}" y="{ly+4}" font-size="9" fill="#333" font-family="monospace">SHARDS</text>')
-    ly2 = ly + 16
-    L.append(f'<line x1="{lx}" y1="{ly2}" x2="{lx+20}" y2="{ly2}" stroke="#f90" stroke-width="2"/>')
-    L.append(f'<circle cx="{lx+10}" cy="{ly2}" r="3" fill="#f90"/>')
-    L.append(f'<text x="{lx+24}" y="{ly2+4}" font-size="9" fill="#333" font-family="monospace">Ground truth</text>')
+    # Legend
+    lx = PP_L + 6
+    ly = PP_T + ph + 20
+    L.append(f'<line x1="{lx}" y1="{ly}" x2="{lx+18}" y2="{ly}" '
+             f'stroke="steelblue" stroke-width="2"/>')
+    L.append(f'<text x="{lx+22}" y="{ly+4}" font-size="9" fill="#333" '
+             f'font-family="monospace">SHARDS</text>')
+    if has_gt_snaps:
+        L.append(f'<line x1="{lx+100}" y1="{ly}" x2="{lx+118}" y2="{ly}" '
+                 f'stroke="#f90" stroke-width="2" stroke-dasharray="5 3"/>')
+        L.append(f'<text x="{lx+122}" y="{ly+4}" font-size="9" fill="#333" '
+                 f'font-family="monospace">GT snapshot</text>')
+    L.append(f'<circle cx="{lx+220}" cy="{ly}" r="3" fill="#f90"/>')
+    L.append(f'<text x="{lx+228}" y="{ly+4}" font-size="9" fill="#333" '
+             f'font-family="monospace">GT final</text>')
 
-    # MAE text (updated by JS)
+    # MAE text — updated by JS; two lines if GT snapshots present
     L.append(
-        f'<text id="mae-{panel_idx}" x="{PP_L+pw//2}" y="{PP_T+ph+32}" '
-        f'text-anchor="middle" font-size="10" fill="#555" font-family="monospace">MAE: —</text>'
+        f'<text id="mae-shards-{panel_idx}" x="{PP_L+pw//2}" y="{PP_T+ph+42}" '
+        f'text-anchor="middle" font-size="10" fill="#4488cc" '
+        f'font-family="monospace">SHARDS MAE: —</text>'
     )
+    if has_gt_snaps:
+        L.append(
+            f'<text id="mae-gt-{panel_idx}" x="{PP_L+pw//2}" y="{PP_T+ph+56}" '
+            f'text-anchor="middle" font-size="10" fill="#cc8800" '
+            f'font-family="monospace">GT MAE: —</text>'
+        )
 
     return "\n    ".join(L)
 
 
-def _shards_path(xs, ys, log_min, log_max):
-    """SVG path string for a SHARDS MRC (straight lines, spanning full x range)."""
+def _curve_path(xs, ys, log_min, log_max):
+    """SVG path: straight lines spanning full x range."""
     valid = [(b, m) for b, m in zip(xs, ys) if b > 0 and 0.0 <= m <= 1.0]
     if not valid:
         return ""
-    # Prepend: miss ratio is 1.0 for any cache smaller than the first tracked bin
     x_min = 10 ** log_min
     if valid[0][0] > x_min:
         valid = [(x_min, 1.0)] + valid
-    # Extend last point horizontally to right edge of plot
     x_max = 10 ** log_max
     if valid[-1][0] < x_max:
         valid.append((x_max, valid[-1][1]))
@@ -264,37 +289,36 @@ def _shards_path(xs, ys, log_min, log_max):
 # Combined HTML generation
 # ---------------------------------------------------------------------------
 
-def make_combined_html(all_snapshots, truth_xs, truth_ys, labels, interval, out_path: Path):
-    """
-    all_snapshots: list of lists, one per panel — each is [(snap_num, xs, ys), ...]
-    """
+def make_combined_html(all_snapshots, all_gt_snapshots,
+                       truth_xs, truth_ys, labels, interval, out_path: Path):
     num_panels = len(all_snapshots)
+    has_gt = len(all_gt_snapshots) > 0
 
-    # Shared x range across all panels and ground truth
+    # Shared x range
     all_x = [b for b in truth_xs if b > 0]
     for snaps in all_snapshots:
         for _, xs, _ in snaps:
             all_x.extend(x for x in xs if x > 0)
+    if has_gt:
+        for _, xs, _ in all_gt_snapshots:
+            all_x.extend(x for x in xs if x > 0)
     log_min = math.log10(min(all_x))
     log_max = math.log10(max(all_x))
 
-    # Build static SVG markup for each panel
-    panel_svgs = []
-    for i, label in enumerate(labels):
-        panel_svgs.append(_panel_svg(i, truth_xs, truth_ys, log_min, log_max, label))
+    # Static panel SVGs
+    panel_svgs = [
+        _panel_svg(i, truth_xs, truth_ys, log_min, log_max, labels[i], has_gt)
+        for i in range(num_panels)
+    ]
 
-    # Precompute paths and MAEs for each panel at each snapshot index
-    # All panels share the same animation index; clamp if a panel has fewer snapshots
+    # Precompute SHARDS paths + MAEs
     max_snaps = max(len(s) for s in all_snapshots)
-
-    panel_paths = []   # panel_paths[panel][snap_index] = svg path string
-    panel_maes  = []   # panel_maes[panel][snap_index] = mae float
-    panel_nums  = []   # panel_nums[panel][snap_index] = snap_num int
+    panel_paths, panel_maes, panel_nums = [], [], []
 
     for snaps in all_snapshots:
         ppaths, pmaes, pnums = [], [], []
         for snap_num, xs, ys in snaps:
-            ppaths.append(_shards_path(xs, ys, log_min, log_max))
+            ppaths.append(_curve_path(xs, ys, log_min, log_max))
             errors = [abs(_interpolate(xs, ys, tb) - tmr)
                       for tb, tmr in zip(truth_xs, truth_ys)
                       if _interpolate(xs, ys, tb) is not None]
@@ -304,24 +328,42 @@ def make_combined_html(all_snapshots, truth_xs, truth_ys, labels, interval, out_
         panel_maes.append(pmaes)
         panel_nums.append(pnums)
 
-    # Determine global snap_nums from the panel with most snapshots
+    # Precompute GT snapshot paths + MAEs (single shared series, all panels use same GT)
+    gt_paths, gt_maes, gt_nums = [], [], []
+    if has_gt:
+        for snap_num, xs, ys in all_gt_snapshots:
+            gt_paths.append(_curve_path(xs, ys, log_min, log_max))
+            errors = [abs(_interpolate(xs, ys, tb) - tmr)
+                      for tb, tmr in zip(truth_xs, truth_ys)
+                      if _interpolate(xs, ys, tb) is not None]
+            gt_maes.append(round(sum(errors) / len(errors), 4) if errors else 0.0)
+            gt_nums.append(snap_num)
+
     longest = max(range(num_panels), key=lambda i: len(panel_nums[i]))
     global_snap_nums = panel_nums[longest]
+    last_snap = global_snap_nums[-1]
 
     # JS data
     panel_paths_js = json.dumps(panel_paths)
     panel_maes_js  = json.dumps(panel_maes)
     snap_nums_js   = json.dumps(global_snap_nums)
-    last_snap      = global_snap_nums[-1]
+    gt_paths_js    = json.dumps(gt_paths)
+    gt_maes_js     = json.dumps(gt_maes)
 
     # Build panel SVG elements
     panel_svg_html = ""
     for i in range(num_panels):
+        gt_path_el = (f'<path id="gt-path-{i}" d="" fill="none" stroke="#f90" '
+                      f'stroke-width="2" stroke-dasharray="6 3" stroke-linejoin="round"/>') if has_gt else ''
         panel_svg_html += f"""
   <svg width="{PW}" height="{PH}" xmlns="http://www.w3.org/2000/svg" style="border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.12);">
     {panel_svgs[i]}
+    {gt_path_el}
     <path id="shards-path-{i}" d="" fill="none" stroke="steelblue" stroke-width="2" stroke-linejoin="round"/>
   </svg>"""
+
+    has_gt_js  = json.dumps(has_gt)
+    num_panels_js = num_panels
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -338,12 +380,12 @@ def make_combined_html(all_snapshots, truth_xs, truth_ys, labels, interval, out_
     background: white; border-radius: 6px;
     box-shadow: 0 1px 4px rgba(0,0,0,.12);
   }}
-  button   {{ padding: 6px 20px; font-size: 14px; font-family: monospace;
-              cursor: pointer; border: 1px solid #aaa; border-radius: 4px; background: #fff; }}
+  button  {{ padding: 6px 20px; font-size: 14px; font-family: monospace;
+             cursor: pointer; border: 1px solid #aaa; border-radius: 4px; background: #fff; }}
   button:hover {{ background: #eee; }}
-  #slider  {{ width: 320px; cursor: pointer; }}
-  .info    {{ font-size: 13px; line-height: 1.8; }}
-  select   {{ font-family: monospace; font-size: 13px; padding: 3px 8px; }}
+  #slider {{ width: 320px; cursor: pointer; }}
+  .info   {{ font-size: 13px; line-height: 1.8; }}
+  select  {{ font-family: monospace; font-size: 13px; padding: 3px 8px; }}
 </style>
 </head>
 <body>
@@ -372,9 +414,12 @@ def make_combined_html(all_snapshots, truth_xs, truth_ys, labels, interval, out_
 const panelPaths = {panel_paths_js};
 const panelMaes  = {panel_maes_js};
 const snapNums   = {snap_nums_js};
+const gtPaths    = {gt_paths_js};
+const gtMaes     = {gt_maes_js};
+const hasGT      = {has_gt_js};
 const INTERVAL   = {interval};
 const N          = {max_snaps};
-const NUM_PANELS = {num_panels};
+const NUM_PANELS = {num_panels_js};
 
 let cur     = 0;
 let playing = false;
@@ -385,8 +430,10 @@ const slider   = document.getElementById('slider');
 const snapInfo = document.getElementById('snap-info');
 const speedSel = document.getElementById('speed');
 
-const pathEls = Array.from({{length: NUM_PANELS}}, (_, i) => document.getElementById('shards-path-' + i));
-const maeEls  = Array.from({{length: NUM_PANELS}}, (_, i) => document.getElementById('mae-' + i));
+const shardsEls  = Array.from({{length: NUM_PANELS}}, (_, i) => document.getElementById('shards-path-' + i));
+const gtEls      = hasGT ? Array.from({{length: NUM_PANELS}}, (_, i) => document.getElementById('gt-path-' + i)) : [];
+const maeShEls   = Array.from({{length: NUM_PANELS}}, (_, i) => document.getElementById('mae-shards-' + i));
+const maeGtEls   = hasGT ? Array.from({{length: NUM_PANELS}}, (_, i) => document.getElementById('mae-gt-' + i)) : [];
 
 function fmtNum(n) {{
   if (n >= 1e9) return (n/1e9).toFixed(1) + 'B';
@@ -396,14 +443,20 @@ function fmtNum(n) {{
 }}
 
 function render(i) {{
+  const gtI = hasGT ? Math.min(i, gtPaths.length - 1) : 0;
   for (let p = 0; p < NUM_PANELS; p++) {{
     const pi = Math.min(i, panelPaths[p].length - 1);
-    pathEls[p].setAttribute('d', panelPaths[p][pi] || '');
-    maeEls[p].textContent = 'MAE: ' + (panelMaes[p][pi] * 100).toFixed(2) + '%';
+    shardsEls[p].setAttribute('d', panelPaths[p][pi] || '');
+    maeShEls[p].textContent = 'SHARDS MAE: ' + (panelMaes[p][pi] * 100).toFixed(2) + '%';
+    if (hasGT) {{
+      gtEls[p].setAttribute('d', gtPaths[gtI] || '');
+      maeGtEls[p].textContent = 'GT MAE: ' + (gtMaes[gtI] * 100).toFixed(2) + '%';
+    }}
   }}
   const sn = snapNums[i];
   snapInfo.textContent =
-    'Snapshot ' + sn + ' / ' + snapNums[snapNums.length-1] + '  |  ' + fmtNum(sn * INTERVAL) + ' accesses seen';
+    'Snapshot ' + sn + ' / ' + snapNums[snapNums.length-1] +
+    '  |  ' + fmtNum(sn * INTERVAL) + ' accesses seen';
   slider.value = i;
 }}
 
@@ -452,17 +505,20 @@ render(0);
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--results-dir',    type=Path, required=True)
-    ap.add_argument('--truth-run',      type=str,  default='exp2_trace')
-    ap.add_argument('--shards-runs',    type=str,  nargs='+',
+    ap.add_argument('--results-dir',      type=Path, required=True)
+    ap.add_argument('--truth-run',        type=str,  default='exp2_trace')
+    ap.add_argument('--truth-mrc',        type=Path, default=None,
+                    help='Direct path to mrc.txt (overrides --truth-run)')
+    ap.add_argument('--shards-runs',      type=str,  nargs='+',
                     default=['exp2_shards_s1','exp2_shards_s01',
                              'exp2_shards_s001','exp2_shards_s0001'])
-    ap.add_argument('--labels',         type=str,  nargs='+',
+    ap.add_argument('--labels',           type=str,  nargs='+',
                     default=['s=1.0','s=0.1','s=0.01','s=0.001'])
-    ap.add_argument('--avg-block-size', type=float, default=None)
-    ap.add_argument('--filtered-csv',   type=Path,  default=None)
-    ap.add_argument('--interval',       type=int,   default=1_000_000)
-    ap.add_argument('--output-dir',     type=Path,  default=None)
+    ap.add_argument('--avg-block-size',   type=float, default=None)
+    ap.add_argument('--filtered-csv',     type=Path,  default=None)
+    ap.add_argument('--gt-snapshots-dir', type=Path,  default=None)
+    ap.add_argument('--interval',         type=int,   default=1_000_000)
+    ap.add_argument('--output-dir',       type=Path,  default=None)
     args = ap.parse_args()
 
     out_dir = args.output_dir or (args.results_dir / 'exp2_analysis')
@@ -478,13 +534,25 @@ def main():
         print(f"Computing avg block size from {csv_path} ...")
         avg_bs = avg_block_size_from_csv(csv_path)
 
-    # ground truth
-    truth_path = args.results_dir / args.truth_run / 'analysis' / 'mrc.txt'
+    # ground truth final MRC
+    if args.truth_mrc:
+        truth_path = args.truth_mrc
+    else:
+        truth_path = args.results_dir / args.truth_run / 'analysis' / 'mrc.txt'
     print(f"Reading ground truth from {truth_path} ...")
     truth_xs, truth_ys = read_ground_truth(truth_path)
     print(f"  {len(truth_xs)} ground truth points")
 
-    # collect snapshots for each run
+    # GT snapshots (optional)
+    all_gt_snapshots = []
+    if args.gt_snapshots_dir and args.gt_snapshots_dir.exists():
+        print(f"Loading GT snapshots from {args.gt_snapshots_dir} ...")
+        all_gt_snapshots = collect_gt_snapshots(args.gt_snapshots_dir)
+        print(f"  {len(all_gt_snapshots)} GT snapshots loaded")
+    else:
+        print("No GT snapshots dir provided — animation will show SHARDS only.")
+
+    # SHARDS snapshots per run
     labels = list(args.labels)
     while len(labels) < len(args.shards_runs):
         labels.append(args.shards_runs[len(labels)])
@@ -502,7 +570,8 @@ def main():
 
     out_file = out_dir / 'exp2_animation.html'
     print(f"\nGenerating combined HTML → {out_file}")
-    make_combined_html(all_snapshots, truth_xs, truth_ys, labels, args.interval, out_file)
+    make_combined_html(all_snapshots, all_gt_snapshots,
+                       truth_xs, truth_ys, labels, args.interval, out_file)
     print(f"\nDone. Output: {out_file}")
 
 
