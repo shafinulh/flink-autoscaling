@@ -262,22 +262,11 @@ def to_svg(title, truth_bytes, truth_mr, shards_bytes, shards_mr,
     lines.append(f'<text x="{cx}" y="{cy}" text-anchor="middle" fill="#333" '
                  f'transform="rotate(-90,{cx},{cy})">Miss rate</text>')
 
-    # --- SHARDS step line ---
+    # --- SHARDS line ---
     valid_s = [(b, m) for b, m in zip(shards_bytes, shards_mr) if 0.0 <= m <= 1.0 and b > 0]
-    if valid_s:
-        pts = []
-        for i, (b, m) in enumerate(valid_s):
-            xp = px(b)
-            yp = py(m)
-            # step: horizontal then vertical
-            if i == 0:
-                pts.append(f"M{xp:.1f},{yp:.1f}")
-            else:
-                prev_xp = px(valid_s[i-1][0])
-                pts.append(f"H{xp:.1f}")
-                pts.append(f"V{yp:.1f}")
-        lines.append(f'<path d="{" ".join(pts)}" fill="none" stroke="steelblue" '
-                     f'stroke-width="2" stroke-linejoin="round"/>')
+    if len(valid_s) >= 2:
+        pts = " ".join(f"{px(b):.1f},{py(m):.1f}" for b, m in valid_s)
+        lines.append(f'<polyline points="{pts}" fill="none" stroke="steelblue" stroke-width="2"/>')
 
     # --- Ground truth line + dots ---
     valid_t = [(b, m) for b, m in zip(truth_bytes, truth_mr) if b > 0]
