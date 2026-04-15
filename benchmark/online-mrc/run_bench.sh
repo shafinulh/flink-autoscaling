@@ -150,11 +150,19 @@ if [[ "$MODE" == "shards" ]]; then
   # SHARDS is activated via environment variables read by BlockCacheTracer on open.
   # ROCKSDB_SHARDS_OUTPUT    — where to dump the MRC binary at DB close
   # ROCKSDB_SHARDS_RATIO     — sampling rate (1.0 = full sampling, 0.01 = 1%)
-  # ROCKSDB_SHARDS_INTERVAL  — snapshot every N processed accesses (0 = disabled)
+  # ROCKSDB_SHARDS_INTERVAL  — snapshot every N total accesses seen (0 = disabled)
+  # ROCKSDB_SHARDS_BIN_SIZE  — histogram bin size in blocks (default: 10)
+  # ROCKSDB_SHARDS_NUM_BINS  — number of histogram bins (default: 10000)
   export ROCKSDB_SHARDS_OUTPUT="${SHARDS_MRC_FILE}"
   export ROCKSDB_SHARDS_RATIO="${SHARDS_SAMPLING}"
   if [[ -n "${ROCKSDB_SHARDS_INTERVAL:-}" ]]; then
     export ROCKSDB_SHARDS_INTERVAL
+  fi
+  if [[ -n "${ROCKSDB_SHARDS_BIN_SIZE:-}" ]]; then
+    export ROCKSDB_SHARDS_BIN_SIZE
+  fi
+  if [[ -n "${ROCKSDB_SHARDS_NUM_BINS:-}" ]]; then
+    export ROCKSDB_SHARDS_NUM_BINS
   fi
 fi
 
