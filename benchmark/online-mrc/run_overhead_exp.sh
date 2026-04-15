@@ -29,18 +29,43 @@ fail() { echo "[$(date '+%H:%M:%S')] ERROR: $*" >&2; exit 1; }
 unset ROCKSDB_SHARDS_INTERVAL
 
 # ---------------------------------------------------------------------------
-# Peak RSS monitor — runs as a background process
+# Peak RSS monitor — runs as a background process.
+#
+# Tracks db_bench directly rather than the run_bench.sh wrapper shell.
+# run_bench.sh is a bash script (~3MB RSS); db_bench is the actual process
+# that allocates the block cache and SHARDS data structures. We find it by
+# polling pgrep -x db_bench (exact name match). Since overhead runs are
+# sequential there is only one db_bench at a time, so the name match is safe.
 # ---------------------------------------------------------------------------
 monitor_rss() {
-  local PID="$1"
+  local PARENT_PID="$1"
   local OUTFILE="$2"
   local MAX_RSS=0
-  local RSS
-  while kill -0 "$PID" 2>/dev/null; do
-    RSS=$(awk '/VmRSS/{print $2}' "/proc/${PID}/status" 2>/dev/null || echo 0)
-    (( RSS > MAX_RSS )) && MAX_RSS=$RSS
+  local RSS TARGET_PID=""
+
+  # Wait until db_bench appears
+  while [[ -z "$TARGET_PID" ]] && kill -0 "$PARENT_PID" 2>/dev/null; do
+    TARGET_PID=$(pgrep -x db_bench 2>/dev/null || true)
+    [[ -z "$TARGET_PID" ]] && sleep 0.5
+  done
+
+  # Poll db_bench RSS until the parent shell (run_bench.sh) exits.
+  # run_bench.sh launches two sequential db_bench invocations (fill + workload),
+  # so TARGET_PID can die mid-run. Re-scan for a new db_bench when that happens.
+  while kill -0 "$PARENT_PID" 2>/dev/null; do
+    if [[ -n "$TARGET_PID" ]]; then
+      RSS=$(awk '/VmRSS/{print $2}' "/proc/${TARGET_PID}/status" 2>/dev/null || true)
+      if [[ -z "$RSS" ]]; then
+        # Phase 1 db_bench exited; wait for Phase 2 to start
+        TARGET_PID=$(pgrep -x db_bench 2>/dev/null || true)
+        sleep 0.5
+        continue
+      fi
+      (( RSS > MAX_RSS )) && MAX_RSS=$RSS
+    fi
     sleep 1
   done
+
   echo "peak_rss_kb=${MAX_RSS}" >> "$OUTFILE"
 }
 

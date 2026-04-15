@@ -213,10 +213,14 @@ def to_html(title, series, output_path: Path):
         dash_attr = f'stroke-dasharray="{dash}"' if dash else ''
         L.append(f'<polyline points="{pts}" fill="none" stroke="{color}" '
                  f'stroke-width="2" {dash_attr}/>')
-        # Dots
-        for s, m in zip(snaps, maes):
-            L.append(f'<circle cx="{px(s,x_min,x_max):.1f}" cy="{py(m,y_max):.1f}" '
-                     f'r="3" fill="{color}"/>')
+        # Dots + labels every 3rd point
+        for i, (s, m) in enumerate(zip(snaps, maes)):
+            cx = px(s, x_min, x_max)
+            cy = py(m, y_max)
+            L.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="3" fill="{color}"/>')
+            if i % 3 == 0:
+                L.append(f'<text x="{cx:.1f}" y="{cy-7:.1f}" text-anchor="middle" '
+                         f'font-size="9" fill="{color}">{m:.1f}%</text>')
 
     # Legend
     lx, ly = PAD_L + 20, PAD_T + 15
@@ -270,6 +274,16 @@ def main():
     while len(labels) < len(args.shards_runs):
         labels.append(args.shards_runs[len(labels)])
 
+    # Build GT snapshot lookup by snap number (if available)
+    gt_dict = {}
+    if args.gt_snapshots_dir and args.gt_snapshots_dir.exists():
+        print(f"\n[GT snapshots] {args.gt_snapshots_dir}")
+        gt_snaps = collect_gt_snapshots(args.gt_snapshots_dir)
+        print(f"  {len(gt_snaps)} snapshots")
+        gt_dict = {n: (xs, ys) for n, xs, ys in gt_snaps}
+
+    use_gt_snapshots = bool(gt_dict)
+
     series = []
 
     # SHARDS series
@@ -280,24 +294,22 @@ def main():
         print(f"  {len(snaps)} snapshots")
         if not snaps:
             continue
-        snap_nums = [n for n, _, _ in snaps]
-        maes = [compute_mae(xs, ys, truth_xs, truth_ys) * 100
-                for _, xs, ys in snaps]
+        snap_nums = []
+        maes = []
+        for n, xs, ys in snaps:
+            if use_gt_snapshots and n in gt_dict:
+                ref_xs, ref_ys = gt_dict[n]
+            else:
+                ref_xs, ref_ys = truth_xs, truth_ys
+            snap_nums.append(n)
+            maes.append(compute_mae(xs, ys, ref_xs, ref_ys) * 100)
         series.append((label, snap_nums, maes, color, ''))
 
-    # GT snapshot series (optional)
-    if args.gt_snapshots_dir and args.gt_snapshots_dir.exists():
-        print(f"\n[GT snapshots] {args.gt_snapshots_dir}")
-        gt_snaps = collect_gt_snapshots(args.gt_snapshots_dir)
-        print(f"  {len(gt_snaps)} snapshots")
-        if gt_snaps:
-            snap_nums = [n for n, _, _ in gt_snaps]
-            maes = [compute_mae(xs, ys, truth_xs, truth_ys) * 100
-                    for _, xs, ys in gt_snaps]
-            series.append(('Ground truth (LRU)', snap_nums, maes, '#FF9800', '6 3'))
-
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    to_html("Exp2: MAE vs Ground Truth over Time", series, args.output)
+    title = ("Exp2: SHARDS MAE vs Corresponding GT Snapshot"
+             if use_gt_snapshots else
+             "Exp2: SHARDS MAE vs Final Ground Truth")
+    to_html(title, series, args.output)
 
 
 if __name__ == '__main__':
