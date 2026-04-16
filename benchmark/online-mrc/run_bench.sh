@@ -151,19 +151,33 @@ if [[ "$MODE" == "shards" ]]; then
   # ROCKSDB_SHARDS_OUTPUT    — where to dump the MRC binary at DB close
   # ROCKSDB_SHARDS_RATIO     — sampling rate (1.0 = full sampling, 0.01 = 1%)
   # ROCKSDB_SHARDS_INTERVAL  — snapshot every N total accesses seen (0 = disabled)
-  # ROCKSDB_SHARDS_BIN_SIZE  — histogram bin size in blocks (default: 10)
-  # ROCKSDB_SHARDS_NUM_BINS  — number of histogram bins (default: 10000)
+  # ROCKSDB_SHARDS_BIN_SIZE  — histogram bin size in blocks
+  # ROCKSDB_SHARDS_NUM_BINS  — number of histogram bins
+  #
+  # BIN_SIZE and NUM_BINS are chosen so that after the 1/s x-axis rescale in
+  # plotting scripts, coverage spans 1MB–16GiB.  Formula:
+  #   max_bytes = num_bins * bin_size * avg_block_size / s  (avg_bs ~4KB)
+  # Per-rate table (targeting 1MB–16GiB coverage):
+  #   s=1.0  : bin_size=10, num_bins=421057  → ~16GiB max after rescale
+  #   s=0.1  : bin_size=10, num_bins=42106   → ~16GiB max after rescale
+  #   s=0.01 : bin_size=1,  num_bins=42106   → ~16GiB max after rescale
+  #   s=0.001: bin_size=1,  num_bins=4211    → ~16GiB max after rescale
   export ROCKSDB_SHARDS_OUTPUT="${SHARDS_MRC_FILE}"
   export ROCKSDB_SHARDS_RATIO="${SHARDS_SAMPLING}"
   if [[ -n "${ROCKSDB_SHARDS_INTERVAL:-}" ]]; then
     export ROCKSDB_SHARDS_INTERVAL
   fi
-  if [[ -n "${ROCKSDB_SHARDS_BIN_SIZE:-}" ]]; then
-    export ROCKSDB_SHARDS_BIN_SIZE
-  fi
-  if [[ -n "${ROCKSDB_SHARDS_NUM_BINS:-}" ]]; then
-    export ROCKSDB_SHARDS_NUM_BINS
-  fi
+  case "${SHARDS_SAMPLING}" in
+    1.0|1)   export ROCKSDB_SHARDS_BIN_SIZE=10;  export ROCKSDB_SHARDS_NUM_BINS=421057 ;;
+    0.1)     export ROCKSDB_SHARDS_BIN_SIZE=10;  export ROCKSDB_SHARDS_NUM_BINS=42106  ;;
+    0.01)    export ROCKSDB_SHARDS_BIN_SIZE=1;   export ROCKSDB_SHARDS_NUM_BINS=42106  ;;
+    0.001)   export ROCKSDB_SHARDS_BIN_SIZE=1;   export ROCKSDB_SHARDS_NUM_BINS=4211   ;;
+    *)
+      # Unknown rate: fall back to env vars if set
+      if [[ -n "${ROCKSDB_SHARDS_BIN_SIZE:-}" ]]; then export ROCKSDB_SHARDS_BIN_SIZE; fi
+      if [[ -n "${ROCKSDB_SHARDS_NUM_BINS:-}" ]];  then export ROCKSDB_SHARDS_NUM_BINS; fi
+      ;;
+  esac
 fi
 
 # ---------------------------------------------------------------------------

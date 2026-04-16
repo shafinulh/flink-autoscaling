@@ -197,8 +197,10 @@ def to_svg(title, truth_bytes, truth_mr, shards_bytes, shards_mr,
 
     # --- x axis: log scale over all data ---
     all_x = [b for b in shards_bytes if b > 0] + [b for b in truth_bytes if b > 0]
-    x_min = min(all_x)
-    x_max = max(all_x)
+    X_MIN_BYTES = 1 * 1024 * 1024   # 1MB floor
+    X_MAX_BYTES = 16 * 1024 ** 3    # 16GiB ceiling
+    x_min = max(min(all_x), X_MIN_BYTES)
+    x_max = min(max(all_x), X_MAX_BYTES)
     log_min = math.log10(x_min)
     log_max = math.log10(x_max)
 
@@ -307,6 +309,9 @@ def main():
     parser.add_argument("--trace-csv",  type=Path, required=True)
     parser.add_argument("--output",     type=Path, default=Path("comparison.svg"))
     parser.add_argument("--title",      type=str,  default="SHARDS vs Ground-Truth MRC")
+    parser.add_argument("--sampling",   type=float, default=1.0,
+                        help="SHARDS sampling ratio (e.g. 0.1 for s=0.1). "
+                             "x-axis is divided by this value to rescale to actual cache bytes.")
     args = parser.parse_args()
 
     print("Reading SHARDS binary MRC...")
@@ -316,7 +321,7 @@ def main():
     print("Computing average block size from trace CSV...")
     avg_bs = avg_block_size_from_csv(args.trace_csv)
 
-    s_bytes = [idx * bin_size * avg_bs for idx in s_indices]
+    s_bytes = [idx * bin_size * avg_bs / args.sampling for idx in s_indices]
 
     print("Reading ground-truth MRC...")
     t_bytes, t_mr = read_ground_truth(args.truth)

@@ -31,8 +31,14 @@ from pathlib import Path
 # Readers
 # ---------------------------------------------------------------------------
 
-def read_shards_txt(path: Path, avg_bs: float):
-    """Read a SHARDS .txt snapshot. Returns (bytes_list, miss_ratio_list)."""
+def read_shards_txt(path: Path, avg_bs: float, sampling_ratio: float = 1.0):
+    """Read a SHARDS .txt snapshot. Returns (bytes_list, miss_ratio_list).
+
+    cache_units (blocks) are converted to bytes via:
+        cache_bytes = cache_units * avg_bs / sampling_ratio
+    The 1/s rescale corrects for the fact that the order-statistics tree measures
+    stack distances in sampled-block units; dividing by s maps back to actual blocks.
+    """
     xs, ys = [], []
     with open(path) as f:
         for line in f:
@@ -49,7 +55,7 @@ def read_shards_txt(path: Path, avg_bs: float):
                 continue
             if cache_units <= 0:
                 continue
-            xs.append(cache_units * avg_bs)
+            xs.append(cache_units * avg_bs / sampling_ratio)
             ys.append(miss_ratio)
     return xs, ys
 
@@ -107,7 +113,7 @@ def avg_block_size_from_csv(path: Path, max_entries: int = 2_000_000) -> float:
     return avg
 
 
-def collect_snapshots(run_dir: Path, avg_bs: float):
+def collect_snapshots(run_dir: Path, avg_bs: float, sampling_ratio: float = 1.0):
     """Collect SHARDS snapshot .txt files. Returns [(snap_num, xs, ys), ...]."""
     snaps = []
     for p in run_dir.iterdir():
@@ -118,7 +124,7 @@ def collect_snapshots(run_dir: Path, avg_bs: float):
                 n = int(stem)
             except ValueError:
                 continue
-            xs, ys = read_shards_txt(p, avg_bs)
+            xs, ys = read_shards_txt(p, avg_bs, sampling_ratio)
             snaps.append((n, xs, ys))
     snaps.sort(key=lambda s: s[0])
     return snaps
@@ -145,10 +151,10 @@ def collect_gt_snapshots(gt_dir: Path):
 # Panel drawing helpers
 # ---------------------------------------------------------------------------
 
-PW, PH = 400, 420
-PP_L, PP_R, PP_T, PP_B = 65, 15, 50, 75
-pw = PW - PP_L - PP_R   # 320
-ph = PH - PP_T - PP_B   # 295
+PW, PH = 400, 400
+PP_L, PP_R, PP_T, PP_B = 60, 10, 35, 60
+pw = PW - PP_L - PP_R   # 330
+ph = PH - PP_T - PP_B   # 305
 
 
 def _px(b, log_min, log_max):
@@ -212,26 +218,24 @@ def _panel_svg(panel_idx, truth_xs, truth_ys, log_min, log_max, label, has_gt_sn
         yg = _py(tick)
         L.append(f'<line x1="{PP_L}" y1="{yg:.1f}" x2="{PP_L+pw}" y2="{yg:.1f}" '
                  f'stroke="#eee" stroke-dasharray="3 3"/>')
-        if panel_idx == 0:
-            L.append(
+        L.append(
                 f'<text x="{PP_L-5}" y="{yg+4:.1f}" text-anchor="end" '
                 f'font-size="10" fill="#666" font-family="monospace">{tick:.1f}</text>'
             )
 
     # Axis labels
     L.append(
-        f'<text x="{PP_L+pw//2}" y="{PH-6}" text-anchor="middle" '
-        f'font-size="10" fill="#333" font-family="monospace">Cache size (log scale)</text>'
+        f'<text x="{PP_L+pw//2}" y="{PP_T+ph+40}" text-anchor="middle" '
+        f'font-size="12" fill="#333" font-family="monospace">Cache size (log scale)</text>'
     )
-    if panel_idx == 0:
-        cx, cy = 11, PP_T + ph // 2
-        L.append(
-            f'<text x="{cx}" y="{cy}" text-anchor="middle" font-size="10" fill="#333" '
-            f'font-family="monospace" transform="rotate(-90,{cx},{cy})">Miss ratio</text>'
-        )
+    cx, cy = 22, PP_T + ph // 2
+    L.append(
+        f'<text x="{cx}" y="{cy}" text-anchor="middle" font-size="12" fill="#333" '
+        f'font-family="monospace" transform="rotate(-90,{cx},{cy})">Miss ratio</text>'
+    )
 
-    # Final ground truth dots (reference — always visible)
-    valid = [(b, m) for b, m in zip(truth_xs, truth_ys) if b > 0]
+    # Final ground truth dots (reference — always visible; skip points left of x-axis minimum)
+    valid = [(b, m) for b, m in zip(truth_xs, truth_ys) if 10**log_min <= b <= 10**log_max * 1.001]
     for b, m in valid:
         L.append(
             f'<circle cx="{_px(b,log_min,log_max):.1f}" cy="{_py(m):.1f}" '
@@ -254,33 +258,15 @@ def _panel_svg(panel_idx, truth_xs, truth_ys, log_min, log_max, label, has_gt_sn
     L.append(f'<text x="{lx+228}" y="{ly+4}" font-size="9" fill="#333" '
              f'font-family="monospace">GT final</text>')
 
-    # MAE text — updated by JS; two lines if GT snapshots present
-    L.append(
-        f'<text id="mae-shards-{panel_idx}" x="{PP_L+pw//2}" y="{PP_T+ph+42}" '
-        f'text-anchor="middle" font-size="10" fill="#4488cc" '
-        f'font-family="monospace">SHARDS MAE: —</text>'
-    )
-    if has_gt_snaps:
-        L.append(
-            f'<text id="mae-gt-{panel_idx}" x="{PP_L+pw//2}" y="{PP_T+ph+56}" '
-            f'text-anchor="middle" font-size="10" fill="#cc8800" '
-            f'font-family="monospace">GT MAE: —</text>'
-        )
 
     return "\n    ".join(L)
 
 
 def _curve_path(xs, ys, log_min, log_max):
-    """SVG path: straight lines spanning full x range."""
-    valid = [(b, m) for b, m in zip(xs, ys) if b > 0 and 0.0 <= m <= 1.0]
+    """SVG path: straight lines covering only the data range."""
+    valid = [(b, m) for b, m in zip(xs, ys) if 10**log_min <= b <= 10**log_max * 1.001 and 0.0 <= m <= 1.0]
     if not valid:
         return ""
-    x_min = 10 ** log_min
-    if valid[0][0] > x_min:
-        valid = [(x_min, 1.0)] + valid
-    x_max = 10 ** log_max
-    if valid[-1][0] < x_max:
-        valid.append((x_max, valid[-1][1]))
     coords = [f"{_px(b, log_min, log_max):.1f},{_py(m):.1f}" for b, m in valid]
     return "M" + " L".join(coords)
 
@@ -302,8 +288,10 @@ def make_combined_html(all_snapshots, all_gt_snapshots,
     if has_gt:
         for _, xs, _ in all_gt_snapshots:
             all_x.extend(x for x in xs if x > 0)
-    log_min = math.log10(min(all_x))
-    log_max = math.log10(max(all_x))
+    X_MIN_BYTES = 1 * 1024 * 1024   # 1MB floor
+    X_MAX_BYTES = 16 * 1024 ** 3    # 16GiB ceiling
+    log_min = math.log10(max(min(all_x), X_MIN_BYTES))
+    log_max = math.log10(min(max(all_x), X_MAX_BYTES))
 
     # Static panel SVGs
     panel_svgs = [
@@ -373,7 +361,7 @@ def make_combined_html(all_snapshots, all_gt_snapshots,
 <style>
   body     {{ font-family: monospace; margin: 20px; background: #f5f5f5; }}
   h2       {{ margin-bottom: 10px; }}
-  #panels  {{ display: flex; gap: 12px; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 8px; }}
+  #panels  {{ display: flex; gap: 12px; flex-wrap: wrap; max-width: 824px; padding-bottom: 8px; }}
   #controls {{
     display: flex; align-items: center; gap: 20px;
     padding: 10px 18px; margin-bottom: 14px;
@@ -432,8 +420,6 @@ const speedSel = document.getElementById('speed');
 
 const shardsEls  = Array.from({{length: NUM_PANELS}}, (_, i) => document.getElementById('shards-path-' + i));
 const gtEls      = hasGT ? Array.from({{length: NUM_PANELS}}, (_, i) => document.getElementById('gt-path-' + i)) : [];
-const maeShEls   = Array.from({{length: NUM_PANELS}}, (_, i) => document.getElementById('mae-shards-' + i));
-const maeGtEls   = hasGT ? Array.from({{length: NUM_PANELS}}, (_, i) => document.getElementById('mae-gt-' + i)) : [];
 
 function fmtNum(n) {{
   if (n >= 1e9) return (n/1e9).toFixed(1) + 'B';
@@ -447,10 +433,8 @@ function render(i) {{
   for (let p = 0; p < NUM_PANELS; p++) {{
     const pi = Math.min(i, panelPaths[p].length - 1);
     shardsEls[p].setAttribute('d', panelPaths[p][pi] || '');
-    maeShEls[p].textContent = 'SHARDS MAE: ' + (panelMaes[p][pi] * 100).toFixed(2) + '%';
     if (hasGT) {{
       gtEls[p].setAttribute('d', gtPaths[gtI] || '');
-      maeGtEls[p].textContent = 'GT MAE: ' + (gtMaes[gtI] * 100).toFixed(2) + '%';
     }}
   }}
   const sn = snapNums[i];
@@ -515,6 +499,10 @@ def main():
     ap.add_argument('--labels',           type=str,  nargs='+',
                     default=['s=1.0','s=0.1','s=0.01','s=0.001'])
     ap.add_argument('--avg-block-size',   type=float, default=None)
+    ap.add_argument('--sampling-ratios',  type=float, nargs='+',
+                    default=[1.0, 0.1, 0.01, 0.001],
+                    help='Sampling ratio per --shards-runs entry (same order). '
+                         'Used to rescale x-axis by 1/s.')
     ap.add_argument('--filtered-csv',     type=Path,  default=None)
     ap.add_argument('--gt-snapshots-dir', type=Path,  default=None)
     ap.add_argument('--interval',         type=int,   default=1_000_000)
@@ -557,11 +545,15 @@ def main():
     while len(labels) < len(args.shards_runs):
         labels.append(args.shards_runs[len(labels)])
 
+    sampling_ratios = list(args.sampling_ratios)
+    while len(sampling_ratios) < len(args.shards_runs):
+        sampling_ratios.append(1.0)
+
     all_snapshots = []
-    for run_name, label in zip(args.shards_runs, labels):
+    for run_name, label, s in zip(args.shards_runs, labels, sampling_ratios):
         run_dir = args.results_dir / run_name
-        print(f"\n[{label}]  {run_dir}")
-        snaps = collect_snapshots(run_dir, avg_bs)
+        print(f"\n[{label}]  {run_dir}  (s={s})")
+        snaps = collect_snapshots(run_dir, avg_bs, s)
         print(f"  {len(snaps)} snapshots found")
         if not snaps:
             print("  WARNING: no snapshots — skipping")

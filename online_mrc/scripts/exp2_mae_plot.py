@@ -27,7 +27,12 @@ from pathlib import Path
 # Readers  (same logic as exp2_animation.py)
 # ---------------------------------------------------------------------------
 
-def read_shards_txt(path: Path, avg_bs: float):
+def read_shards_txt(path: Path, avg_bs: float, sampling_ratio: float = 1.0):
+    """Read a SHARDS .txt snapshot. Returns (bytes_list, miss_ratio_list).
+
+    cache_bytes = cache_units * avg_bs / sampling_ratio
+    The 1/s rescale maps sampled-block stack distances to actual cache bytes.
+    """
     xs, ys = [], []
     with open(path) as f:
         for line in f:
@@ -44,7 +49,7 @@ def read_shards_txt(path: Path, avg_bs: float):
                 continue
             if cache_units <= 0:
                 continue
-            xs.append(cache_units * avg_bs)
+            xs.append(cache_units * avg_bs / sampling_ratio)
             ys.append(miss_ratio)
     return xs, ys
 
@@ -80,7 +85,7 @@ def read_gt_snapshot(path: Path):
     return read_ground_truth(path)
 
 
-def collect_shards_snapshots(run_dir: Path, avg_bs: float):
+def collect_shards_snapshots(run_dir: Path, avg_bs: float, sampling_ratio: float = 1.0):
     snaps = []
     for p in run_dir.iterdir():
         name = p.name
@@ -90,7 +95,7 @@ def collect_shards_snapshots(run_dir: Path, avg_bs: float):
                 n = int(stem)
             except ValueError:
                 continue
-            xs, ys = read_shards_txt(p, avg_bs)
+            xs, ys = read_shards_txt(p, avg_bs, sampling_ratio)
             snaps.append((n, xs, ys))
     snaps.sort(key=lambda s: s[0])
     return snaps
@@ -213,14 +218,11 @@ def to_html(title, series, output_path: Path):
         dash_attr = f'stroke-dasharray="{dash}"' if dash else ''
         L.append(f'<polyline points="{pts}" fill="none" stroke="{color}" '
                  f'stroke-width="2" {dash_attr}/>')
-        # Dots + labels every 3rd point
+        # Dots every 3rd point
         for i, (s, m) in enumerate(zip(snaps, maes)):
             cx = px(s, x_min, x_max)
             cy = py(m, y_max)
             L.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="3" fill="{color}"/>')
-            if i % 3 == 0:
-                L.append(f'<text x="{cx:.1f}" y="{cy-7:.1f}" text-anchor="middle" '
-                         f'font-size="9" fill="{color}">{m:.1f}%</text>')
 
     # Legend
     lx, ly = PAD_L + 20, PAD_T + 15
@@ -262,6 +264,10 @@ def main():
     ap.add_argument('--labels',           type=str, nargs='+',
                     default=['s=1.0','s=0.1','s=0.01','s=0.001'])
     ap.add_argument('--avg-block-size',   type=float, default=4080.2)
+    ap.add_argument('--sampling-ratios',  type=float, nargs='+',
+                    default=[1.0, 0.1, 0.01, 0.001],
+                    help='Sampling ratio per --shards-runs entry (same order). '
+                         'Used to rescale x-axis by 1/s when computing MAE.')
     ap.add_argument('--gt-snapshots-dir', type=Path, default=None)
     ap.add_argument('--output',           type=Path, required=True)
     args = ap.parse_args()
@@ -273,6 +279,10 @@ def main():
     labels = list(args.labels)
     while len(labels) < len(args.shards_runs):
         labels.append(args.shards_runs[len(labels)])
+
+    sampling_ratios = list(args.sampling_ratios)
+    while len(sampling_ratios) < len(args.shards_runs):
+        sampling_ratios.append(1.0)
 
     # Build GT snapshot lookup by snap number (if available)
     gt_dict = {}
@@ -287,10 +297,10 @@ def main():
     series = []
 
     # SHARDS series
-    for run_name, label, color in zip(args.shards_runs, labels, COLORS):
+    for run_name, label, color, s in zip(args.shards_runs, labels, COLORS, sampling_ratios):
         run_dir = args.results_dir / run_name
-        print(f"\n[{label}] {run_dir}")
-        snaps = collect_shards_snapshots(run_dir, args.avg_block_size)
+        print(f"\n[{label}] {run_dir}  (s={s})")
+        snaps = collect_shards_snapshots(run_dir, args.avg_block_size, s)
         print(f"  {len(snaps)} snapshots")
         if not snaps:
             continue
