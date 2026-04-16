@@ -157,9 +157,11 @@ def main():
     ap.add_argument('--run-ids',     type=str, nargs='+',
                     default=['exp2_overhead_plain','exp2_overhead_s1',
                              'exp2_overhead_s01','exp2_overhead_s001',
-                             'exp2_overhead_s0001'])
+                             'exp2_overhead_s0001','exp2_overhead_s00001',
+                             'exp2_overhead_s000001'])
     ap.add_argument('--labels',      type=str, nargs='+',
-                    default=['plain','s=1.0','s=0.1','s=0.01','s=0.001'])
+                    default=['plain','s=1.0','s=0.1','s=0.01','s=0.001',
+                             's=0.0001','s=0.00001'])
     ap.add_argument('--output',      type=Path, required=True)
     args = ap.parse_args()
 

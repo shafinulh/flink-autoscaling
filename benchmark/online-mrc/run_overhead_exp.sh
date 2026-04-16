@@ -129,16 +129,18 @@ log "Starting overhead experiments..."
 log "Results dir: $RESULTS_DIR"
 log ""
 
-run_mode plain  ""      exp2_overhead_plain
-run_mode shards "1.0"   exp2_overhead_s1
-run_mode shards "0.1"   exp2_overhead_s01
-run_mode shards "0.01"  exp2_overhead_s001
-run_mode shards "0.001" exp2_overhead_s0001
+run_mode plain  ""        exp2_overhead_plain
+run_mode shards "1.0"     exp2_overhead_s1
+run_mode shards "0.1"     exp2_overhead_s01
+run_mode shards "0.01"    exp2_overhead_s001
+run_mode shards "0.001"   exp2_overhead_s0001
+run_mode shards "0.0001"  exp2_overhead_s00001
+run_mode shards "0.00001" exp2_overhead_s000001
 
 log ""
 log "All overhead experiments complete."
 log "Results:"
-for RUN_ID in exp2_overhead_plain exp2_overhead_s1 exp2_overhead_s01 exp2_overhead_s001 exp2_overhead_s0001; do
+for RUN_ID in exp2_overhead_plain exp2_overhead_s1 exp2_overhead_s01 exp2_overhead_s001 exp2_overhead_s0001 exp2_overhead_s00001 exp2_overhead_s000001; do
   OFILE="${RESULTS_DIR}/${RUN_ID}/overhead.txt"
   if [[ -f "$OFILE" ]]; then
     echo "  $RUN_ID:"

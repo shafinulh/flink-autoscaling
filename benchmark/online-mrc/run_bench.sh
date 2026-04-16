@@ -172,6 +172,8 @@ if [[ "$MODE" == "shards" ]]; then
     0.1)     export ROCKSDB_SHARDS_BIN_SIZE=10;  export ROCKSDB_SHARDS_NUM_BINS=42106  ;;
     0.01)    export ROCKSDB_SHARDS_BIN_SIZE=1;   export ROCKSDB_SHARDS_NUM_BINS=42106  ;;
     0.001)   export ROCKSDB_SHARDS_BIN_SIZE=1;   export ROCKSDB_SHARDS_NUM_BINS=4211   ;;
+    0.0001)  export ROCKSDB_SHARDS_BIN_SIZE=1;   export ROCKSDB_SHARDS_NUM_BINS=421    ;;
+    0.00001) export ROCKSDB_SHARDS_BIN_SIZE=1;   export ROCKSDB_SHARDS_NUM_BINS=42     ;;
     *)
       # Unknown rate: fall back to env vars if set
       if [[ -n "${ROCKSDB_SHARDS_BIN_SIZE:-}" ]]; then export ROCKSDB_SHARDS_BIN_SIZE; fi
