@@ -18,7 +18,7 @@ import argparse
 from pathlib import Path
 
 
-COLORS = ['#90A4AE', '#2196F3', '#4CAF50', '#FF9800', '#E91E63']
+COLORS = ['#90A4AE', '#2196F3', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0', '#795548']
 
 
 def parse_overhead(path: Path):

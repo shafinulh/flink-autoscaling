@@ -203,15 +203,19 @@ def _panel_svg(panel_idx, truth_xs, truth_ys, log_min, log_max, label, has_gt_sn
         f'fill="none" stroke="#aaa" stroke-width="1"/>'
     )
 
-    # X grid + labels
-    for p in range(int(math.ceil(log_min)), int(math.floor(log_max)) + 1):
-        xg = _px(10**p, log_min, log_max)
+    # X grid + labels (powers of 2)
+    p2_start = math.ceil(math.log2(10 ** log_min))
+    p2_end   = math.floor(math.log2(10 ** log_max))
+    for p in range(p2_start, p2_end + 1):
+        b  = 2 ** p
+        xg = _px(b, log_min, log_max)
         L.append(f'<line x1="{xg:.1f}" y1="{PP_T}" x2="{xg:.1f}" y2="{PP_T+ph}" '
                  f'stroke="#eee" stroke-dasharray="3 3"/>')
-        L.append(
-            f'<text x="{xg:.1f}" y="{PP_T+ph+15}" text-anchor="middle" '
-            f'font-size="9" fill="#666" font-family="monospace">{_fmt_bytes(10**p)}</text>'
-        )
+        if p % 2 == 0:   # label every 4× step to avoid overlap
+            L.append(
+                f'<text x="{xg:.1f}" y="{PP_T+ph+15}" text-anchor="middle" '
+                f'font-size="9" fill="#666" font-family="monospace">{_fmt_bytes(b)}</text>'
+            )
 
     # Y grid + labels (leftmost panel only)
     for tick in [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]:
@@ -361,7 +365,7 @@ def make_combined_html(all_snapshots, all_gt_snapshots,
 <style>
   body     {{ font-family: monospace; margin: 20px; background: #f5f5f5; }}
   h2       {{ margin-bottom: 10px; }}
-  #panels  {{ display: flex; gap: 12px; flex-wrap: wrap; max-width: 824px; padding-bottom: 8px; }}
+  #panels  {{ display: grid; grid-template-columns: repeat(3, {PW}px); gap: 12px; padding-bottom: 8px; }}
   #controls {{
     display: flex; align-items: center; gap: 20px;
     padding: 10px 18px; margin-bottom: 14px;

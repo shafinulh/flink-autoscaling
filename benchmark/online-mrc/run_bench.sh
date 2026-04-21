@@ -3,16 +3,19 @@
 # to generate a realistic block cache access stream.
 #
 # Usage:
-#   ./run_bench.sh [--mode plain|trace|shards] [--run-id NAME] [--sampling RATE] [--dry-run]
+#   ./run_bench.sh [--mode plain|trace|shards|phase_switch] [--run-id NAME] [--sampling RATE] [--dry-run]
 #
 # Modes:
-#   plain  — Run db_bench and collect RocksDB stats/LOG at the end.
-#             No trace overhead.
-#   trace  — Run db_bench with block cache trace enabled. The trace binary
-#             is saved for offline analysis with block_cache_trace_analyzer.
-#   shards — Run db_bench with online SHARDS MRC generation enabled.
-#             Set ROCKSDB_SHARDS_RATIO via --sampling (default: 1.0 = full sampling).
-#             MRC is dumped to results/<run-id>/online_mrc.bin at the end.
+#   plain         — Run db_bench and collect RocksDB stats/LOG at the end.
+#                   No trace overhead.
+#   trace         — Run db_bench with block cache trace enabled. The trace binary
+#                   is saved for offline analysis with block_cache_trace_analyzer.
+#   shards        — Run db_bench with online SHARDS MRC generation enabled.
+#                   Set ROCKSDB_SHARDS_RATIO via --sampling (default: 1.0 = full sampling).
+#                   MRC is dumped to results/<run-id>/online_mrc.bin at the end.
+#   phase_switch  — Like shards, but uses the readrandom_phase_switch benchmark:
+#                   first half of ops use uniform key distribution, second half Zipfian.
+#                   Demonstrates SHARDS behaviour under a mid-workload distribution shift.
 #
 # After a trace run, analyze with:
 #   block_cache_trace_analyzer \
@@ -54,8 +57,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ "$MODE" == "plain" || "$MODE" == "trace" || "$MODE" == "shards" ]] \
-  || fail "--mode must be 'plain', 'trace', or 'shards', got '$MODE'"
+[[ "$MODE" == "plain" || "$MODE" == "trace" || "$MODE" == "shards" || "$MODE" == "phase_switch" ]] \
+  || fail "--mode must be 'plain', 'trace', 'shards', or 'phase_switch', got '$MODE'"
 
 if [[ -z "$RUN_ID" ]]; then
   RUN_ID="${MODE}_$(date '+%Y%m%d_%H%M%S')"
@@ -80,7 +83,7 @@ SHARDS_MRC_FILE="${RUN_DIR}/online_mrc.bin"
 
 log "Run ID      : $RUN_ID"
 log "Mode        : $MODE"
-if [[ "$MODE" == "shards" ]]; then
+if [[ "$MODE" == "shards" || "$MODE" == "phase_switch" ]]; then
   log "SHARDS ratio: $SHARDS_SAMPLING"
 fi
 log "Keys        : $NUM_KEYS"
@@ -126,14 +129,24 @@ FILL_ARGS=(
 
 # Phase 2: NUM_WORKLOAD_OPS read/write ops over the full NUM_KEYS key space.
 # --reads controls total op count for readrandomwriterandom (no --duration).
-WORKLOAD_ARGS=(
-  "${COMMON_ARGS[@]}"
-  --benchmarks=readrandomwriterandom
-  --use_existing_db
-  --num="${NUM_KEYS}"
-  --reads="${NUM_WORKLOAD_OPS}"
-  --readwritepercent="${READ_WRITE_PERCENT}"
-)
+if [[ "$MODE" == "phase_switch" ]]; then
+  WORKLOAD_ARGS=(
+    "${COMMON_ARGS[@]}"
+    --benchmarks=readrandom_phase_switch
+    --use_existing_db
+    --num="${NUM_KEYS}"
+    --reads="${NUM_WORKLOAD_OPS}"
+  )
+else
+  WORKLOAD_ARGS=(
+    "${COMMON_ARGS[@]}"
+    --benchmarks=readrandomwriterandom
+    --use_existing_db
+    --num="${NUM_KEYS}"
+    --reads="${NUM_WORKLOAD_OPS}"
+    --readwritepercent="${READ_WRITE_PERCENT}"
+  )
+fi
 
 if [[ "$MODE" == "trace" ]]; then
   # Only attach the tracer to the workload phase, not the fill phase.
@@ -146,7 +159,7 @@ if [[ "$MODE" == "trace" ]]; then
   )
 fi
 
-if [[ "$MODE" == "shards" ]]; then
+if [[ "$MODE" == "shards" || "$MODE" == "phase_switch" ]]; then
   # SHARDS is activated via environment variables read by BlockCacheTracer on open.
   # ROCKSDB_SHARDS_OUTPUT    — where to dump the MRC binary at DB close
   # ROCKSDB_SHARDS_RATIO     — sampling rate (1.0 = full sampling, 0.01 = 1%)
@@ -190,16 +203,19 @@ fi
 # Strip them so the log stays readable; real errors still pass through.
 filter_progress() { grep -v '^\.\.\..*ops'; }
 
+WORKLOAD_DESC="readrandomwriterandom"
+[[ "$MODE" == "phase_switch" ]] && WORKLOAD_DESC="readrandom_phase_switch (uniform→zipf)"
+
 if $DRY_RUN; then
   log "DRY RUN — would execute:"
   echo "  mkdir -p ${RUN_DIR}"
-  if [[ "$MODE" == "shards" ]]; then
+  if [[ "$MODE" == "shards" || "$MODE" == "phase_switch" ]]; then
     echo "  export ROCKSDB_SHARDS_OUTPUT=${SHARDS_MRC_FILE}"
     echo "  export ROCKSDB_SHARDS_RATIO=${SHARDS_SAMPLING}"
   fi
   echo "  # Phase 1: fill ${NUM_FILL_OPS} keys"
   echo "  ${DB_BENCH} ${FILL_ARGS[*]} 2>&1 | filter_progress | tee ${LOG_FILE}"
-  echo "  # Phase 2: ${NUM_WORKLOAD_OPS} ops readrandomwriterandom over ${NUM_KEYS}-key space"
+  echo "  # Phase 2: ${NUM_WORKLOAD_OPS} ops ${WORKLOAD_DESC} over ${NUM_KEYS}-key space"
   echo "  ${DB_BENCH} ${WORKLOAD_ARGS[*]} 2>&1 | filter_progress | tee -a ${LOG_FILE}"
   exit 0
 fi
@@ -209,7 +225,7 @@ mkdir -p "${RUN_DIR}"
 log "Phase 1: filling DB with ${NUM_FILL_OPS} keys..."
 "${DB_BENCH}" "${FILL_ARGS[@]}" 2>&1 | filter_progress | tee "${LOG_FILE}"
 
-log "Phase 2: ${NUM_WORKLOAD_OPS} ops readrandomwriterandom over ${NUM_KEYS}-key space..."
+log "Phase 2: ${NUM_WORKLOAD_OPS} ops ${WORKLOAD_DESC} over ${NUM_KEYS}-key space..."
 "${DB_BENCH}" "${WORKLOAD_ARGS[@]}" 2>&1 | filter_progress | tee -a "${LOG_FILE}"
 
 # ---------------------------------------------------------------------------
@@ -238,7 +254,7 @@ if [[ "$MODE" == "trace" ]]; then
   fi
 fi
 
-if [[ "$MODE" == "shards" ]]; then
+if [[ "$MODE" == "shards" || "$MODE" == "phase_switch" ]]; then
   if [[ -f "$SHARDS_MRC_FILE" ]]; then
     log "Online MRC: ${SHARDS_MRC_FILE}"
   else

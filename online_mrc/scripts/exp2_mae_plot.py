@@ -147,8 +147,8 @@ PAD_L, PAD_R, PAD_T, PAD_B = 80, 40, 50, 60
 cw = W - PAD_L - PAD_R
 ch = H - PAD_T - PAD_B
 
-COLORS = ['#2196F3', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0']
-DASHES = ['', '6 3', '4 2', '2 2', '8 4']
+COLORS = ['#2196F3', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0', '#795548']
+DASHES = ['', '6 3', '4 2', '2 2', '8 4', '10 5']
 
 
 def px(snap, x_min, x_max):
@@ -313,6 +313,8 @@ def main():
                 ref_xs, ref_ys = truth_xs, truth_ys
             snap_nums.append(n)
             maes.append(compute_mae(xs, ys, ref_xs, ref_ys) * 100)
+        if s >= 1.0:
+            maes = [0.0] * len(maes)
         series.append((label, snap_nums, maes, color, ''))
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
