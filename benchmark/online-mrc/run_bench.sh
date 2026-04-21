@@ -1,23 +1,20 @@
 #!/usr/bin/env bash
-# run_bench.sh — drive db_bench with a Zipfian readrandomwriterandom workload
-# to generate a realistic block cache access stream.
+# run_bench.sh — drive db_bench with a block cache access workload.
 #
 # Usage:
-#   ./run_bench.sh [--mode plain|trace|shards|phase_switch|trace_phase_switch] [--run-id NAME] [--sampling RATE] [--dry-run]
+#   ./run_bench.sh [--mode MODE] [--run-id NAME] [--sampling RATE]
+#                 [--num-workload-ops N] [--dry-run]
 #
 # Modes:
-#   plain               — Run db_bench and collect RocksDB stats/LOG at the end.
-#                         No trace overhead.
-#   trace               — Run db_bench with block cache trace enabled. The trace binary
-#                         is saved for offline analysis with block_cache_trace_analyzer.
-#   shards              — Run db_bench with online SHARDS MRC generation enabled.
-#                         Set ROCKSDB_SHARDS_RATIO via --sampling (default: 1.0 = full sampling).
-#                         MRC is dumped to results/<run-id>/online_mrc.bin at the end.
-#   phase_switch        — Like shards, but uses the readrandom_phase_switch benchmark:
-#                         first half of ops use uniform key distribution, second half Zipfian.
-#                         Demonstrates SHARDS behaviour under a mid-workload distribution shift.
-#   trace_phase_switch  — Like trace, but uses the readrandom_phase_switch benchmark.
-#                         Collect a trace for ground-truth GT snapshot generation for Exp3.
+#   plain                   — Run db_bench and collect RocksDB stats/LOG. No overhead.
+#   trace                   — Run db_bench with block cache tracing (Zipfian workload).
+#   shards                  — Run db_bench with online SHARDS MRC generation (Zipfian workload).
+#                             Set sampling rate via --sampling (default: 1.0).
+#   uniform                 — Like shards, but uses uniform key distribution (readrandom).
+#   trace_uniform           — Like trace, but uses uniform key distribution.
+#   phase_switch            — Like shards, uniform first half then Zipfian second half.
+#   reverse_phase_switch    — Like shards, Zipfian first half then uniform second half.
+#   trace_phase_switch      — Like trace, but uses readrandom_phase_switch workload.
 #
 # After a trace run, analyze with:
 #   block_cache_trace_analyzer \
@@ -50,17 +47,21 @@ SHARDS_SAMPLING="1.0"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --mode)     MODE="$2";           shift 2 ;;
-    --run-id)   RUN_ID="$2";         shift 2 ;;
-    --sampling) SHARDS_SAMPLING="$2"; shift 2 ;;
-    --dry-run)  DRY_RUN=true;        shift ;;
-    -h|--help)  usage ;;
+    --mode)             MODE="$2";              shift 2 ;;
+    --run-id)           RUN_ID="$2";            shift 2 ;;
+    --sampling)         SHARDS_SAMPLING="$2";   shift 2 ;;
+    --num-workload-ops) NUM_WORKLOAD_OPS="$2";  shift 2 ;;
+    --dry-run)          DRY_RUN=true;           shift ;;
+    -h|--help)          usage ;;
     *) fail "Unknown argument: $1" ;;
   esac
 done
 
-[[ "$MODE" == "plain" || "$MODE" == "trace" || "$MODE" == "shards" || "$MODE" == "phase_switch" || "$MODE" == "trace_phase_switch" ]] \
-  || fail "--mode must be 'plain', 'trace', 'shards', 'phase_switch', or 'trace_phase_switch', got '$MODE'"
+[[ "$MODE" == "plain" || "$MODE" == "trace" || "$MODE" == "shards" || \
+   "$MODE" == "uniform" || "$MODE" == "trace_uniform" || \
+   "$MODE" == "phase_switch" || "$MODE" == "reverse_phase_switch" || \
+   "$MODE" == "trace_phase_switch" ]] \
+  || fail "--mode must be one of: plain, trace, shards, uniform, trace_uniform, phase_switch, reverse_phase_switch, trace_phase_switch"
 
 if [[ -z "$RUN_ID" ]]; then
   RUN_ID="${MODE}_$(date '+%Y%m%d_%H%M%S')"
@@ -85,10 +86,11 @@ SHARDS_MRC_FILE="${RUN_DIR}/online_mrc.bin"
 
 log "Run ID      : $RUN_ID"
 log "Mode        : $MODE"
-if [[ "$MODE" == "shards" || "$MODE" == "phase_switch" ]]; then
+if [[ "$MODE" == "shards" || "$MODE" == "uniform" || "$MODE" == "phase_switch" || "$MODE" == "reverse_phase_switch" ]]; then
   log "SHARDS ratio: $SHARDS_SAMPLING"
 fi
 [[ "$MODE" == "trace_phase_switch" ]] && log "Tracing     : enabled (phase_switch workload)"
+[[ "$MODE" == "trace_uniform" ]] && log "Tracing     : enabled (uniform workload)"
 log "Keys        : $NUM_KEYS"
 log "Fill ops    : $NUM_FILL_OPS"
 log "Workload ops: $NUM_WORKLOAD_OPS"
@@ -140,6 +142,22 @@ if [[ "$MODE" == "phase_switch" || "$MODE" == "trace_phase_switch" ]]; then
     --num="${NUM_KEYS}"
     --reads="${NUM_WORKLOAD_OPS}"
   )
+elif [[ "$MODE" == "reverse_phase_switch" ]]; then
+  WORKLOAD_ARGS=(
+    "${COMMON_ARGS[@]}"
+    --benchmarks=readrandom_reverse_phase_switch
+    --use_existing_db
+    --num="${NUM_KEYS}"
+    --reads="${NUM_WORKLOAD_OPS}"
+  )
+elif [[ "$MODE" == "uniform" || "$MODE" == "trace_uniform" ]]; then
+  WORKLOAD_ARGS=(
+    "${COMMON_ARGS[@]}"
+    --benchmarks=readrandom
+    --use_existing_db
+    --num="${NUM_KEYS}"
+    --reads="${NUM_WORKLOAD_OPS}"
+  )
 else
   WORKLOAD_ARGS=(
     "${COMMON_ARGS[@]}"
@@ -151,7 +169,7 @@ else
   )
 fi
 
-if [[ "$MODE" == "trace" || "$MODE" == "trace_phase_switch" ]]; then
+if [[ "$MODE" == "trace" || "$MODE" == "trace_phase_switch" || "$MODE" == "trace_uniform" ]]; then
   # Only attach the tracer to the workload phase, not the fill phase.
   # db_bench can only hold one active tracer per run; mixing benchmarks in
   # a single invocation with --block_cache_trace_file causes "Resource busy"
@@ -162,7 +180,7 @@ if [[ "$MODE" == "trace" || "$MODE" == "trace_phase_switch" ]]; then
   )
 fi
 
-if [[ "$MODE" == "shards" || "$MODE" == "phase_switch" ]]; then
+if [[ "$MODE" == "shards" || "$MODE" == "uniform" || "$MODE" == "phase_switch" || "$MODE" == "reverse_phase_switch" ]]; then
   # SHARDS is activated via environment variables read by BlockCacheTracer on open.
   # ROCKSDB_SHARDS_OUTPUT    — where to dump the MRC binary at DB close
   # ROCKSDB_SHARDS_RATIO     — sampling rate (1.0 = full sampling, 0.01 = 1%)
@@ -207,16 +225,18 @@ fi
 filter_progress() { grep -v '^\.\.\..*ops'; }
 
 WORKLOAD_DESC="readrandomwriterandom"
-[[ "$MODE" == "phase_switch" || "$MODE" == "trace_phase_switch" ]] && WORKLOAD_DESC="readrandom_phase_switch (uniform→zipf)"
+[[ "$MODE" == "uniform"         || "$MODE" == "trace_uniform"       ]] && WORKLOAD_DESC="readrandom (uniform)"
+[[ "$MODE" == "phase_switch"    || "$MODE" == "trace_phase_switch"  ]] && WORKLOAD_DESC="readrandom_phase_switch (uniform→zipf)"
+[[ "$MODE" == "reverse_phase_switch" ]] && WORKLOAD_DESC="readrandom_reverse_phase_switch (zipf→uniform)"
 
 if $DRY_RUN; then
   log "DRY RUN — would execute:"
   echo "  mkdir -p ${RUN_DIR}"
-  if [[ "$MODE" == "shards" || "$MODE" == "phase_switch" ]]; then
+  if [[ "$MODE" == "shards" || "$MODE" == "uniform" || "$MODE" == "phase_switch" || "$MODE" == "reverse_phase_switch" ]]; then
     echo "  export ROCKSDB_SHARDS_OUTPUT=${SHARDS_MRC_FILE}"
     echo "  export ROCKSDB_SHARDS_RATIO=${SHARDS_SAMPLING}"
   fi
-  if [[ "$MODE" == "trace" || "$MODE" == "trace_phase_switch" ]]; then
+  if [[ "$MODE" == "trace" || "$MODE" == "trace_phase_switch" || "$MODE" == "trace_uniform" ]]; then
     echo "  # block cache tracing -> ${TRACE_FILE}"
   fi
   echo "  # Phase 1: fill ${NUM_FILL_OPS} keys"
@@ -246,7 +266,7 @@ if [[ -f "$ROCKSDB_LOG" ]]; then
   log "Copied RocksDB LOG -> ${RUN_DIR}/rocksdb.LOG"
 fi
 
-if [[ "$MODE" == "trace" || "$MODE" == "trace_phase_switch" ]]; then
+if [[ "$MODE" == "trace" || "$MODE" == "trace_phase_switch" || "$MODE" == "trace_uniform" ]]; then
   if [[ -f "$TRACE_FILE" ]]; then
     TRACE_SIZE=$(du -sh "$TRACE_FILE" | cut -f1)
     log "Trace: ${TRACE_FILE} (${TRACE_SIZE})"
@@ -260,7 +280,7 @@ if [[ "$MODE" == "trace" || "$MODE" == "trace_phase_switch" ]]; then
   fi
 fi
 
-if [[ "$MODE" == "shards" || "$MODE" == "phase_switch" ]]; then
+if [[ "$MODE" == "shards" || "$MODE" == "uniform" || "$MODE" == "phase_switch" || "$MODE" == "reverse_phase_switch" ]]; then
   if [[ -f "$SHARDS_MRC_FILE" ]]; then
     log "Online MRC: ${SHARDS_MRC_FILE}"
   else
