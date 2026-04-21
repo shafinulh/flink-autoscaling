@@ -3,19 +3,21 @@
 # to generate a realistic block cache access stream.
 #
 # Usage:
-#   ./run_bench.sh [--mode plain|trace|shards|phase_switch] [--run-id NAME] [--sampling RATE] [--dry-run]
+#   ./run_bench.sh [--mode plain|trace|shards|phase_switch|trace_phase_switch] [--run-id NAME] [--sampling RATE] [--dry-run]
 #
 # Modes:
-#   plain         — Run db_bench and collect RocksDB stats/LOG at the end.
-#                   No trace overhead.
-#   trace         — Run db_bench with block cache trace enabled. The trace binary
-#                   is saved for offline analysis with block_cache_trace_analyzer.
-#   shards        — Run db_bench with online SHARDS MRC generation enabled.
-#                   Set ROCKSDB_SHARDS_RATIO via --sampling (default: 1.0 = full sampling).
-#                   MRC is dumped to results/<run-id>/online_mrc.bin at the end.
-#   phase_switch  — Like shards, but uses the readrandom_phase_switch benchmark:
-#                   first half of ops use uniform key distribution, second half Zipfian.
-#                   Demonstrates SHARDS behaviour under a mid-workload distribution shift.
+#   plain               — Run db_bench and collect RocksDB stats/LOG at the end.
+#                         No trace overhead.
+#   trace               — Run db_bench with block cache trace enabled. The trace binary
+#                         is saved for offline analysis with block_cache_trace_analyzer.
+#   shards              — Run db_bench with online SHARDS MRC generation enabled.
+#                         Set ROCKSDB_SHARDS_RATIO via --sampling (default: 1.0 = full sampling).
+#                         MRC is dumped to results/<run-id>/online_mrc.bin at the end.
+#   phase_switch        — Like shards, but uses the readrandom_phase_switch benchmark:
+#                         first half of ops use uniform key distribution, second half Zipfian.
+#                         Demonstrates SHARDS behaviour under a mid-workload distribution shift.
+#   trace_phase_switch  — Like trace, but uses the readrandom_phase_switch benchmark.
+#                         Collect a trace for ground-truth GT snapshot generation for Exp3.
 #
 # After a trace run, analyze with:
 #   block_cache_trace_analyzer \
@@ -57,8 +59,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ "$MODE" == "plain" || "$MODE" == "trace" || "$MODE" == "shards" || "$MODE" == "phase_switch" ]] \
-  || fail "--mode must be 'plain', 'trace', 'shards', or 'phase_switch', got '$MODE'"
+[[ "$MODE" == "plain" || "$MODE" == "trace" || "$MODE" == "shards" || "$MODE" == "phase_switch" || "$MODE" == "trace_phase_switch" ]] \
+  || fail "--mode must be 'plain', 'trace', 'shards', 'phase_switch', or 'trace_phase_switch', got '$MODE'"
 
 if [[ -z "$RUN_ID" ]]; then
   RUN_ID="${MODE}_$(date '+%Y%m%d_%H%M%S')"
@@ -86,6 +88,7 @@ log "Mode        : $MODE"
 if [[ "$MODE" == "shards" || "$MODE" == "phase_switch" ]]; then
   log "SHARDS ratio: $SHARDS_SAMPLING"
 fi
+[[ "$MODE" == "trace_phase_switch" ]] && log "Tracing     : enabled (phase_switch workload)"
 log "Keys        : $NUM_KEYS"
 log "Fill ops    : $NUM_FILL_OPS"
 log "Workload ops: $NUM_WORKLOAD_OPS"
@@ -129,7 +132,7 @@ FILL_ARGS=(
 
 # Phase 2: NUM_WORKLOAD_OPS read/write ops over the full NUM_KEYS key space.
 # --reads controls total op count for readrandomwriterandom (no --duration).
-if [[ "$MODE" == "phase_switch" ]]; then
+if [[ "$MODE" == "phase_switch" || "$MODE" == "trace_phase_switch" ]]; then
   WORKLOAD_ARGS=(
     "${COMMON_ARGS[@]}"
     --benchmarks=readrandom_phase_switch
@@ -148,7 +151,7 @@ else
   )
 fi
 
-if [[ "$MODE" == "trace" ]]; then
+if [[ "$MODE" == "trace" || "$MODE" == "trace_phase_switch" ]]; then
   # Only attach the tracer to the workload phase, not the fill phase.
   # db_bench can only hold one active tracer per run; mixing benchmarks in
   # a single invocation with --block_cache_trace_file causes "Resource busy"
@@ -204,7 +207,7 @@ fi
 filter_progress() { grep -v '^\.\.\..*ops'; }
 
 WORKLOAD_DESC="readrandomwriterandom"
-[[ "$MODE" == "phase_switch" ]] && WORKLOAD_DESC="readrandom_phase_switch (uniform→zipf)"
+[[ "$MODE" == "phase_switch" || "$MODE" == "trace_phase_switch" ]] && WORKLOAD_DESC="readrandom_phase_switch (uniform→zipf)"
 
 if $DRY_RUN; then
   log "DRY RUN — would execute:"
@@ -212,6 +215,9 @@ if $DRY_RUN; then
   if [[ "$MODE" == "shards" || "$MODE" == "phase_switch" ]]; then
     echo "  export ROCKSDB_SHARDS_OUTPUT=${SHARDS_MRC_FILE}"
     echo "  export ROCKSDB_SHARDS_RATIO=${SHARDS_SAMPLING}"
+  fi
+  if [[ "$MODE" == "trace" || "$MODE" == "trace_phase_switch" ]]; then
+    echo "  # block cache tracing -> ${TRACE_FILE}"
   fi
   echo "  # Phase 1: fill ${NUM_FILL_OPS} keys"
   echo "  ${DB_BENCH} ${FILL_ARGS[*]} 2>&1 | filter_progress | tee ${LOG_FILE}"
@@ -240,7 +246,7 @@ if [[ -f "$ROCKSDB_LOG" ]]; then
   log "Copied RocksDB LOG -> ${RUN_DIR}/rocksdb.LOG"
 fi
 
-if [[ "$MODE" == "trace" ]]; then
+if [[ "$MODE" == "trace" || "$MODE" == "trace_phase_switch" ]]; then
   if [[ -f "$TRACE_FILE" ]]; then
     TRACE_SIZE=$(du -sh "$TRACE_FILE" | cut -f1)
     log "Trace: ${TRACE_FILE} (${TRACE_SIZE})"
