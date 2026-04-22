@@ -128,12 +128,23 @@ if [[ "${USE_DIRECT_READS}" == "true" ]]; then
   log "Direct IO           : enabled (O_DIRECT)"
 fi
 
-# Phase 1: fill NUM_FILL_OPS keys into the DB sequentially.
-FILL_ARGS=(
-  "${COMMON_ARGS[@]}"
-  --benchmarks=fillrandom
-  --num="${NUM_FILL_OPS}"
-)
+# Phase 1: fill NUM_FILL_OPS keys into the DB.
+# Zipfian read-only modes use fillseq to guarantee 100% key coverage —
+# fillrandom leaves ~37% of keys unfilled (birthday problem), causing most
+# readrandom_zipfian ops to return NotFound and bypass the block cache.
+if [[ "$MODE" == "shards_zipfian" || "$MODE" == "trace_zipfian" ]]; then
+  FILL_ARGS=(
+    "${COMMON_ARGS[@]}"
+    --benchmarks=fillseq
+    --num="${NUM_FILL_OPS}"
+  )
+else
+  FILL_ARGS=(
+    "${COMMON_ARGS[@]}"
+    --benchmarks=fillrandom
+    --num="${NUM_FILL_OPS}"
+  )
+fi
 
 # Phase 2: NUM_WORKLOAD_OPS read/write ops over the full NUM_KEYS key space.
 # --reads controls total op count for readrandomwriterandom (no --duration).
