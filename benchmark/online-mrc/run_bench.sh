@@ -15,6 +15,7 @@
 #   phase_switch            — Like shards, uniform first half then Zipfian second half.
 #   reverse_phase_switch    — Like shards, Zipfian first half then uniform second half.
 #   trace_phase_switch      — Like trace, but uses readrandom_phase_switch workload.
+#   trace_zipfian           — Like trace, but uses readrandom (reads only, Zipfian).
 #
 # After a trace run, analyze with:
 #   block_cache_trace_analyzer \
@@ -60,8 +61,8 @@ done
 [[ "$MODE" == "plain" || "$MODE" == "trace" || "$MODE" == "shards" || \
    "$MODE" == "uniform" || "$MODE" == "trace_uniform" || \
    "$MODE" == "phase_switch" || "$MODE" == "reverse_phase_switch" || \
-   "$MODE" == "trace_phase_switch" ]] \
-  || fail "--mode must be one of: plain, trace, shards, uniform, trace_uniform, phase_switch, reverse_phase_switch, trace_phase_switch"
+   "$MODE" == "trace_phase_switch" || "$MODE" == "trace_zipfian" ]] \
+  || fail "--mode must be one of: plain, trace, shards, uniform, trace_uniform, phase_switch, reverse_phase_switch, trace_phase_switch, trace_zipfian"
 
 if [[ -z "$RUN_ID" ]]; then
   RUN_ID="${MODE}_$(date '+%Y%m%d_%H%M%S')"
@@ -150,7 +151,7 @@ elif [[ "$MODE" == "reverse_phase_switch" ]]; then
     --num="${NUM_KEYS}"
     --reads="${NUM_WORKLOAD_OPS}"
   )
-elif [[ "$MODE" == "uniform" || "$MODE" == "trace_uniform" ]]; then
+elif [[ "$MODE" == "uniform" || "$MODE" == "trace_uniform" || "$MODE" == "trace_zipfian" ]]; then
   WORKLOAD_ARGS=(
     "${COMMON_ARGS[@]}"
     --benchmarks=readrandom
@@ -169,7 +170,7 @@ else
   )
 fi
 
-if [[ "$MODE" == "trace" || "$MODE" == "trace_phase_switch" || "$MODE" == "trace_uniform" ]]; then
+if [[ "$MODE" == "trace" || "$MODE" == "trace_phase_switch" || "$MODE" == "trace_uniform" || "$MODE" == "trace_zipfian" ]]; then
   # Only attach the tracer to the workload phase, not the fill phase.
   # db_bench can only hold one active tracer per run; mixing benchmarks in
   # a single invocation with --block_cache_trace_file causes "Resource busy"
@@ -226,6 +227,7 @@ filter_progress() { grep -v '^\.\.\..*ops'; }
 
 WORKLOAD_DESC="readrandomwriterandom"
 [[ "$MODE" == "uniform"         || "$MODE" == "trace_uniform"       ]] && WORKLOAD_DESC="readrandom (uniform)"
+[[ "$MODE" == "trace_zipfian"  ]] && WORKLOAD_DESC="readrandom (zipfian, reads only)"
 [[ "$MODE" == "phase_switch"    || "$MODE" == "trace_phase_switch"  ]] && WORKLOAD_DESC="readrandom_phase_switch (uniform→zipf)"
 [[ "$MODE" == "reverse_phase_switch" ]] && WORKLOAD_DESC="readrandom_reverse_phase_switch (zipf→uniform)"
 
@@ -236,7 +238,7 @@ if $DRY_RUN; then
     echo "  export ROCKSDB_SHARDS_OUTPUT=${SHARDS_MRC_FILE}"
     echo "  export ROCKSDB_SHARDS_RATIO=${SHARDS_SAMPLING}"
   fi
-  if [[ "$MODE" == "trace" || "$MODE" == "trace_phase_switch" || "$MODE" == "trace_uniform" ]]; then
+  if [[ "$MODE" == "trace" || "$MODE" == "trace_phase_switch" || "$MODE" == "trace_uniform" || "$MODE" == "trace_zipfian" ]]; then
     echo "  # block cache tracing -> ${TRACE_FILE}"
   fi
   echo "  # Phase 1: fill ${NUM_FILL_OPS} keys"
@@ -266,7 +268,7 @@ if [[ -f "$ROCKSDB_LOG" ]]; then
   log "Copied RocksDB LOG -> ${RUN_DIR}/rocksdb.LOG"
 fi
 
-if [[ "$MODE" == "trace" || "$MODE" == "trace_phase_switch" || "$MODE" == "trace_uniform" ]]; then
+if [[ "$MODE" == "trace" || "$MODE" == "trace_phase_switch" || "$MODE" == "trace_uniform" || "$MODE" == "trace_zipfian" ]]; then
   if [[ -f "$TRACE_FILE" ]]; then
     TRACE_SIZE=$(du -sh "$TRACE_FILE" | cut -f1)
     log "Trace: ${TRACE_FILE} (${TRACE_SIZE})"
