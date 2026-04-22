@@ -223,6 +223,9 @@ if [[ "$MODE" == "shards" || "$MODE" == "uniform" || "$MODE" == "phase_switch" |
   if [[ -n "${ROCKSDB_SHARDS_INTERVAL:-}" ]]; then
     export ROCKSDB_SHARDS_INTERVAL
   fi
+  if [[ -n "${ROCKSDB_SHARDS_DECAY:-}" ]]; then
+    export ROCKSDB_SHARDS_DECAY
+  fi
   case "${SHARDS_SAMPLING}" in
     1.0|1)   export ROCKSDB_SHARDS_BIN_SIZE=10;  export ROCKSDB_SHARDS_NUM_BINS=421057 ;;
     0.1)     export ROCKSDB_SHARDS_BIN_SIZE=10;  export ROCKSDB_SHARDS_NUM_BINS=42106  ;;
