@@ -15,7 +15,8 @@
 #   phase_switch            — Like shards, uniform first half then Zipfian second half.
 #   reverse_phase_switch    — Like shards, Zipfian first half then uniform second half.
 #   trace_phase_switch      — Like trace, but uses readrandom_phase_switch workload.
-#   trace_zipfian           — Like trace, but uses readrandom (reads only, Zipfian).
+#   trace_zipfian           — Like trace, but uses readrandom_zipfian (reads only, Zipfian).
+#   shards_zipfian          — Like shards, but uses readrandom_zipfian (reads only, Zipfian).
 #
 # After a trace run, analyze with:
 #   block_cache_trace_analyzer \
@@ -61,8 +62,9 @@ done
 [[ "$MODE" == "plain" || "$MODE" == "trace" || "$MODE" == "shards" || \
    "$MODE" == "uniform" || "$MODE" == "trace_uniform" || \
    "$MODE" == "phase_switch" || "$MODE" == "reverse_phase_switch" || \
-   "$MODE" == "trace_phase_switch" || "$MODE" == "trace_zipfian" ]] \
-  || fail "--mode must be one of: plain, trace, shards, uniform, trace_uniform, phase_switch, reverse_phase_switch, trace_phase_switch, trace_zipfian"
+   "$MODE" == "trace_phase_switch" || "$MODE" == "trace_zipfian" || \
+   "$MODE" == "shards_zipfian" ]] \
+  || fail "--mode must be one of: plain, trace, shards, uniform, trace_uniform, phase_switch, reverse_phase_switch, trace_phase_switch, trace_zipfian, shards_zipfian"
 
 if [[ -z "$RUN_ID" ]]; then
   RUN_ID="${MODE}_$(date '+%Y%m%d_%H%M%S')"
@@ -87,7 +89,7 @@ SHARDS_MRC_FILE="${RUN_DIR}/online_mrc.bin"
 
 log "Run ID      : $RUN_ID"
 log "Mode        : $MODE"
-if [[ "$MODE" == "shards" || "$MODE" == "uniform" || "$MODE" == "phase_switch" || "$MODE" == "reverse_phase_switch" ]]; then
+if [[ "$MODE" == "shards" || "$MODE" == "uniform" || "$MODE" == "phase_switch" || "$MODE" == "reverse_phase_switch" || "$MODE" == "shards_zipfian" ]]; then
   log "SHARDS ratio: $SHARDS_SAMPLING"
 fi
 [[ "$MODE" == "trace_phase_switch" ]] && log "Tracing     : enabled (phase_switch workload)"
@@ -151,10 +153,18 @@ elif [[ "$MODE" == "reverse_phase_switch" ]]; then
     --num="${NUM_KEYS}"
     --reads="${NUM_WORKLOAD_OPS}"
   )
-elif [[ "$MODE" == "uniform" || "$MODE" == "trace_uniform" || "$MODE" == "trace_zipfian" ]]; then
+elif [[ "$MODE" == "uniform" || "$MODE" == "trace_uniform" ]]; then
   WORKLOAD_ARGS=(
     "${COMMON_ARGS[@]}"
     --benchmarks=readrandom
+    --use_existing_db
+    --num="${NUM_KEYS}"
+    --reads="${NUM_WORKLOAD_OPS}"
+  )
+elif [[ "$MODE" == "trace_zipfian" || "$MODE" == "shards_zipfian" ]]; then
+  WORKLOAD_ARGS=(
+    "${COMMON_ARGS[@]}"
+    --benchmarks=readrandom_zipfian
     --use_existing_db
     --num="${NUM_KEYS}"
     --reads="${NUM_WORKLOAD_OPS}"
@@ -181,7 +191,7 @@ if [[ "$MODE" == "trace" || "$MODE" == "trace_phase_switch" || "$MODE" == "trace
   )
 fi
 
-if [[ "$MODE" == "shards" || "$MODE" == "uniform" || "$MODE" == "phase_switch" || "$MODE" == "reverse_phase_switch" ]]; then
+if [[ "$MODE" == "shards" || "$MODE" == "uniform" || "$MODE" == "phase_switch" || "$MODE" == "reverse_phase_switch" || "$MODE" == "shards_zipfian" ]]; then
   # SHARDS is activated via environment variables read by BlockCacheTracer on open.
   # ROCKSDB_SHARDS_OUTPUT    — where to dump the MRC binary at DB close
   # ROCKSDB_SHARDS_RATIO     — sampling rate (1.0 = full sampling, 0.01 = 1%)
@@ -227,14 +237,14 @@ filter_progress() { grep -v '^\.\.\..*ops'; }
 
 WORKLOAD_DESC="readrandomwriterandom"
 [[ "$MODE" == "uniform"         || "$MODE" == "trace_uniform"       ]] && WORKLOAD_DESC="readrandom (uniform)"
-[[ "$MODE" == "trace_zipfian"  ]] && WORKLOAD_DESC="readrandom (zipfian, reads only)"
+[[ "$MODE" == "trace_zipfian"  || "$MODE" == "shards_zipfian" ]] && WORKLOAD_DESC="readrandom_zipfian (zipfian, reads only)"
 [[ "$MODE" == "phase_switch"    || "$MODE" == "trace_phase_switch"  ]] && WORKLOAD_DESC="readrandom_phase_switch (uniform→zipf)"
 [[ "$MODE" == "reverse_phase_switch" ]] && WORKLOAD_DESC="readrandom_reverse_phase_switch (zipf→uniform)"
 
 if $DRY_RUN; then
   log "DRY RUN — would execute:"
   echo "  mkdir -p ${RUN_DIR}"
-  if [[ "$MODE" == "shards" || "$MODE" == "uniform" || "$MODE" == "phase_switch" || "$MODE" == "reverse_phase_switch" ]]; then
+  if [[ "$MODE" == "shards" || "$MODE" == "uniform" || "$MODE" == "phase_switch" || "$MODE" == "reverse_phase_switch" || "$MODE" == "shards_zipfian" ]]; then
     echo "  export ROCKSDB_SHARDS_OUTPUT=${SHARDS_MRC_FILE}"
     echo "  export ROCKSDB_SHARDS_RATIO=${SHARDS_SAMPLING}"
   fi
@@ -282,7 +292,7 @@ if [[ "$MODE" == "trace" || "$MODE" == "trace_phase_switch" || "$MODE" == "trace
   fi
 fi
 
-if [[ "$MODE" == "shards" || "$MODE" == "uniform" || "$MODE" == "phase_switch" || "$MODE" == "reverse_phase_switch" ]]; then
+if [[ "$MODE" == "shards" || "$MODE" == "uniform" || "$MODE" == "phase_switch" || "$MODE" == "reverse_phase_switch" || "$MODE" == "shards_zipfian" ]]; then
   if [[ -f "$SHARDS_MRC_FILE" ]]; then
     log "Online MRC: ${SHARDS_MRC_FILE}"
   else
