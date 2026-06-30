@@ -6,47 +6,30 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/env.sh"
 
-# Usage: ./build_nexmark.sh [unique|separate-unique] [clean]
-variant="unique"
 clean=""
-connector_src=""
-connector_jar=""
 
 for arg in "$@"; do
   case "$arg" in
-    unique)
-      variant="unique"
-      ;;
-    separate|separate-unique)
-      variant="separate-unique"
-      ;;
     clean)
       clean="clean"
       ;;
     *)
-      echo "Usage: $0 [unique|separate-unique] [clean]" >&2
+      echo "Usage: $0 [clean]" >&2
       exit 1
       ;;
   esac
 done
 
-case "$variant" in
-  unique)
-    nexmark_src="$NEXMARK_V2_SRC"
-    ;;
-  separate-unique)
-    nexmark_src="$NEXMARK_SEPARATE_UNIQUE_SRC"
-    connector_src="$NEXMARK_SEPARATE_UNIQUE_KAFKA_CONNECTOR_SRC"
-    connector_jar="$connector_src/flink-sql-connector-kafka/target/flink-sql-connector-kafka-3.3.0.jar"
-    ;;
-esac
+nexmark_src="$NEXMARK_V2_SRC"
+connector_src="$NEXMARK_KAFKA_CONNECTOR_SRC"
+connector_jar="$connector_src/flink-sql-connector-kafka/target/flink-sql-connector-kafka-3.3.0.jar"
 
 if [[ ! -d "$nexmark_src" ]]; then
   echo "Nexmark source directory not found: ${nexmark_src}" >&2
   exit 1
 fi
 
-if [[ -n "$connector_src" && ! -d "$connector_src" ]]; then
+if [[ ! -d "$connector_src" ]]; then
   echo "Kafka connector source directory not found: ${connector_src}" >&2
   exit 1
 fi
@@ -56,15 +39,14 @@ if [[ "$clean" == "clean" ]]; then
   maybe_sudo rm -rf "$NEXMARK_HOME"
 fi
 
-if [[ -n "$connector_src" ]]; then
-  log "Building Kafka SQL connector in ${connector_src}"
-  (
-    cd "$connector_src" || exit 1
-    mvn -pl flink-sql-connector-kafka -am -Dflink.version=1.20.0 -DskipTests package
-  )
-fi
+log "Building Kafka SQL connector in ${connector_src}"
+(
+  cd "$connector_src" || exit 1
+  mkdir -p target
+  mvn -pl flink-sql-connector-kafka -am -Dflink.version=1.20.0 -DskipTests package
+)
 
-log "Building Nexmark (${variant}) in ${nexmark_src}"
+log "Building Nexmark in ${nexmark_src}"
 (
   cd "$nexmark_src" || exit 1
   ./build.sh
@@ -81,9 +63,12 @@ maybe_sudo mv "$extracted_dir" "$NEXMARK_HOME"
 log "Copying Nexmark jars into Flink"
 maybe_sudo cp "${NEXMARK_HOME}"/lib/*.jar "${FLINK_HOME}/lib/"
 
-if [[ -n "$connector_jar" ]]; then
-  log "Installing Kafka SQL connector into Flink + Nexmark"
-  maybe_sudo find "${FLINK_HOME}/lib" -maxdepth 1 -type f -name 'flink-sql-connector-kafka-*.jar.bak-*' -delete
-  maybe_sudo cp "$connector_jar" "${FLINK_HOME}/lib/flink-sql-connector-kafka-3.3.0-1.20.jar"
-  maybe_sudo cp "$connector_jar" "${NEXMARK_HOME}/lib/flink-sql-connector-kafka-3.3.0-1.20.jar"
+if [[ ! -f "$connector_jar" ]]; then
+  echo "Kafka connector jar not found after build: ${connector_jar}" >&2
+  exit 1
 fi
+
+log "Installing Kafka SQL connector into Flink + Nexmark"
+maybe_sudo find "${FLINK_HOME}/lib" -maxdepth 1 -type f -name 'flink-sql-connector-kafka-*.jar.bak-*' -delete
+maybe_sudo cp "$connector_jar" "${FLINK_HOME}/lib/flink-sql-connector-kafka-3.3.0-1.20.jar"
+maybe_sudo cp "$connector_jar" "${NEXMARK_HOME}/lib/flink-sql-connector-kafka-3.3.0-1.20.jar"

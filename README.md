@@ -26,8 +26,7 @@ Current focus:
 ## Common workflows
 1) Build Nexmark Artifacts:
 ```
-./scripts/build_nexmark.sh unique clean
-./scripts/build_nexmark.sh separate-unique clean
+./scripts/build_nexmark.sh clean
 ```
 
 2) Build custom rocksdb-options:

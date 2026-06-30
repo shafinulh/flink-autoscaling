@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="${FLINK_SRC:-/opt/flink_1-20_src}"
 DIST_ROOT="${ROOT_DIR}/flink-dist/target"
-DEST_DIR="/opt/flink"
+DEST_DIR="${DEST_DIR:-/opt/flink}"
 # NOTE: update "${FLINK_HOME}/conf/workers" with your worker IPs after staging.
 # Typical flow: build frocksdb, build nexmark, apply the desired Flink config,
 # then sync the cluster.
