@@ -24,7 +24,6 @@ The submodules used by this flow are:
 
 - `nexmark-v2`: Nexmark benchmark implementation and Kafka SQL connector source.
 - `rocksdb-options`: custom Flink RocksDB options factory.
-- `frocksdb` and `flink_1-20_src`: only needed when rebuilding a custom Flink/FrocksDB runtime.
 
 ## 2. Install host prerequisites
 
@@ -34,10 +33,10 @@ Install Java, Maven, build tools, SSH/rsync, and the small utilities used by the
 sudo apt-get update
 sudo apt-get install -y \
   openjdk-11-jdk maven build-essential curl tar rsync openssh-client \
-  libsnappy-dev python3
+  python3
 ```
 
-If your Flink source build requires a different JDK, use the JDK required by that Flink checkout. The paper sweep scripts themselves do not require building Flink from source.
+The paper sweep scripts do not require building Flink from source.
 
 ## 3. Configure local paths and cluster hosts
 
@@ -49,17 +48,18 @@ export AUTOSCALING_ROOT=/opt
 export FLINK_HOME=/opt/flink
 export NEXMARK_HOME=/opt/nexmark
 
-# Worker hosts that should receive /opt/flink and /opt/nexmark during sync.
-# Leave empty for a single-node local run.
-export WORKER_HOSTS="worker-hostname-or-ip"
+# Current two-node setup:
+# - c180 / 142.150.234.180: JobManager and control node
+# - c155 / 142.150.234.155: TaskManager worker
+export WORKER_HOSTS="142.150.234.155"
 
-# SSH user used by sync/log collection. Use root only if root SSH is how the
-# cluster is configured.
-export SSH_USER=root
+# SSH user used by sync/log collection. Use an account that can write /opt on
+# c155; use root only if that is how the cluster is configured.
+export SSH_USER=haques24
 
 # Hosts from which run_query_runner_v2_sweep.sh copies /data/rocksdb_native_logs.
 # Usually the TaskManager host(s).
-export LOG_HOSTS_STRING="worker-hostname-or-ip"
+export LOG_HOSTS_STRING="142.150.234.155"
 EOF
 ```
 
@@ -73,9 +73,7 @@ set +a
 
 ## 4. Stage a Flink runtime
 
-For the paper sweeps, use the stable Flink runtime path unless you specifically need custom Flink source changes.
-
-Default stable runtime:
+Use the stable Flink runtime path for the paper sweeps:
 
 ```bash
 cd /opt
@@ -83,22 +81,11 @@ sudo rm -rf /opt/flink
 ./scripts/setup_stable_flink_runtime.sh
 ```
 
-`setup_stable_flink_runtime.sh` currently defaults to Apache Flink `1.20.3`. To force exact `1.20.0`, run:
+`setup_stable_flink_runtime.sh` currently defaults to Apache Flink `1.20.3`. To force exact `1.20.0`:
 
 ```bash
 FLINK_VERSION=1.20.0 ./scripts/setup_stable_flink_runtime.sh
 ```
-
-Optional custom source runtime:
-
-```bash
-cd /opt
-FLINK_SRC=/opt/flink_1-20_src ./scripts/build_flink_1-20_src.sh
-sudo rm -rf /opt/flink
-FLINK_SRC=/opt/flink_1-20_src ./scripts/setup_custom_flink_runtime.sh
-```
-
-Only use the custom path if you need the `flink_1-20_src` submodule changes. If you also need custom JNI changes from `frocksdb`, build/install those before building Flink.
 
 ## 5. Build and install `rocksdb-options`
 
@@ -117,11 +104,9 @@ cd /opt
 
 What the options factory does:
 
-- Creates the RocksDB block cache and write buffer manager used by the state backend.
-- Enables direct reads and direct IO for flush/compaction so cache misses measure real disk IO instead of the OS page cache.
-- Registers RocksDB statistics and uses `/data/rocksdb_native_logs` for native RocksDB logs.
+- Configures the RocksDB block cache/write buffer manager used by the state backend.
+- Enables RocksDB metrics and native stats dumps.
 - Reads `state.backend.rocksdb.fixed-prefix-bytes` and `state.backend.rocksdb.bloom-filter.bits-per-key` from the active Flink config.
-- Enables or disables fixed-prefix extraction and Bloom filters based on those values.
 
 The paper sweep runner temporarily rewrites those two config keys for each experiment variant, then restores the config on exit.
 
@@ -145,7 +130,8 @@ Override those in `scripts/env.local.sh` only if your checkout layout differs.
 
 Edit `/opt/configs/flink/flink-conf-v2.yaml` for your machines:
 
-- `jobmanager.rpc.address`: set this to the JobManager hostname/IP.
+- `jobmanager.rpc.address`: for the current cluster, use c180's IP:
+  `142.150.234.180`.
 - `state.checkpoints.dir` and `execution.checkpointing.savepoint-dir`: set these to writable paths.
 - `state.backend.rocksdb.localdir`: ensure this exists on the TaskManager host, default `/data/rocksdb`.
 
@@ -159,10 +145,10 @@ sudo chown -R "$USER":"$USER" /data/rocksdb /data/rocksdb_native_logs
 sudo chown -R "$USER":"$USER" /mnt/experiments/nexmark-benchmark/flink-state
 ```
 
-Update the Flink worker list after staging `/opt/flink`:
+Update the Flink worker list on c180 after staging `/opt/flink`. Today the single worker is c155:
 
 ```bash
-printf '%s\n' worker-hostname-or-ip > /opt/flink/conf/workers
+printf '%s\n' 142.150.234.155 > /opt/flink/conf/workers
 ```
 
 Then apply the tracked Flink config and sync artifacts to workers:
@@ -178,6 +164,26 @@ For a single-node local run, `WORKER_HOSTS` can be empty and `sync_cluster.sh` d
 ## 8. Run the paper sweeps
 
 Do not manually start the Flink cluster before launching a sweep. `run_query_runner_v2_sweep.sh` starts and stops the cluster for each run.
+
+Before rerunning after an interrupted or failed sweep, make sure the previous cluster is down:
+
+```bash
+cd /opt
+./scripts/stop_cluster.sh
+```
+
+That script runs Flink shutdown and Nexmark shutdown. If the sweep is still running in your terminal, stop it with `Ctrl-C` and wait for the cleanup messages to finish before running `stop_cluster.sh` manually.
+
+If you still see lingering Flink components, run the explicit shutdown commands from c180:
+
+```bash
+/opt/flink/bin/stop-cluster.sh || true
+/opt/flink/bin/stop-cluster.sh || true
+/opt/nexmark/bin/shutdown_cluster.sh || true
+ssh haques24@142.150.234.155 '/opt/flink/bin/taskmanager.sh stop || true'
+```
+
+Then verify with `jps` or `ps -ef | grep -E 'StandaloneSessionClusterEntrypoint|TaskManagerRunner|run_query'` on c180 and c155 before restarting a sweep.
 
 Run all default `3g` and `8g` TaskManager memory sizes:
 
@@ -202,6 +208,23 @@ RUN_LABEL=paper-rerun-01 LOG_HOSTS_STRING="worker-hostname-or-ip" \
 ```
 
 Outputs are written under `/opt/benchmark/query-runner-v2/<run-label>-.../`, with per-run metadata, copied configs, Nexmark config snapshots, run logs, profiling output, and RocksDB native logs.
+
+RocksDB native logs are important because the options factory writes periodic metrics dumps there. On c155 the source path is:
+
+```text
+/data/rocksdb_native_logs
+```
+
+On a completed run, `run_query_runner_v2_sweep.sh` copies that directory into the run output under `rocksdb_logs/` and then deletes the remote files. On an incomplete run, copy or delete them manually before restarting so the next run does not mix metrics dumps:
+
+```bash
+mkdir -p /opt/benchmark/query-runner-v2/manual-rocksdb-logs
+scp -r haques24@142.150.234.155:/data/rocksdb_native_logs \
+  /opt/benchmark/query-runner-v2/manual-rocksdb-logs/rocksdb_native_logs-$(date +%Y%m%d-%H%M%S)
+
+ssh haques24@142.150.234.155 \
+  'find /data/rocksdb_native_logs -mindepth 1 -maxdepth 1 -exec rm -rf {} +'
+```
 
 ## 9. What each paper script runs
 
